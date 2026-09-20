@@ -29,6 +29,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Activate Godot CI templates and Android settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          if [ -d "/root/.config/godot" ]; then
+            cp -a /root/.config/godot/. "$HOME/.config/godot/"
+          fi
+          cp -a "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/."             "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          test -f "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip"
+
       - name: Rebuild Vice Quest source ZIP
         shell: bash
         run: |
