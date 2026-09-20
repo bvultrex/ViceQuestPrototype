@@ -6,6 +6,7 @@ on:
     branches: [ main ]
     paths:
       - ".github/workflows/build-quest-apk.yml"
+      - "quest_patch/**"
       - "ViceQuestPrototype-v0.6.17.0-GTA2-Behavior-Audio-Quest-FIXED.zip.part1"
       - "ViceQuestPrototype-v0.6.17.0-GTA2-Behavior-Audio-Quest-FIXED.zip.part2"
 
@@ -15,7 +16,7 @@ permissions:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.17.0-Quest-Tabletop-Hotfix"
+  EXPORT_NAME: "ViceQuest-v0.6.17.0-Quest-VRBoard"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -59,19 +60,51 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project root: $PROJECT_DIR"
 
-      - name: Apply Quest tabletop hotfix
+      - name: Apply Quest VR board patch
         shell: bash
         run: |
           set -euo pipefail
-          FILE="$PROJECT_DIR/scripts/presentation_rig.gd"
-          test -f "$FILE"
-          grep -q 'const QUEST_WORLD_SCALE: float = 10.0' "$FILE"
-          grep -q 'const QUEST_DEATH_WORLD_SCALE: float = 7.0' "$FILE"
-          grep -q 'const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -8.0, 8.0)' "$FILE"
-          grep -q 'xr_camera.far = 320.0' "$FILE"
-          sed -i             -e 's/const QUEST_WORLD_SCALE: float = 10.0/const QUEST_WORLD_SCALE: float = 160.0/'             -e 's/const QUEST_DEATH_WORLD_SCALE: float = 7.0/const QUEST_DEATH_WORLD_SCALE: float = 112.0/'             -e 's/const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -8.0, 8.0)/const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -128.0, 128.0)/'             -e 's/xr_camera.far = 320.0/xr_camera.far = 960.0/'             "$FILE"
-          grep -q 'const QUEST_WORLD_SCALE: float = 160.0' "$FILE"
-          echo "Quest tabletop scale hotfix applied."
+
+          cp "$GITHUB_WORKSPACE/quest_patch/presentation_rig.gd" "$PROJECT_DIR/scripts/presentation_rig.gd"
+
+          MAIN="$PROJECT_DIR/scripts/main.gd"
+          INPUT="$PROJECT_DIR/scripts/input_bridge.gd"
+          EXPORT="$PROJECT_DIR/export_presets.cfg"
+
+          # Start OpenXR before loading/splash UI so Quest can actually see boot UI.
+          sed -i '/func _ready() -> void:/,/    _build_boot_ui()/ {
+            /    _configure_runtime_profile()/a\    _build_camera()
+          }' "$MAIN"
+
+          # Do not create the camera a second time at the end of boot.
+          sed -i '/    _set_boot_progress(0.93, "Preparing camera and multiplayer menu")/ {
+            n
+            /    _build_camera()/d
+          }' "$MAIN"
+
+          # Route boot/menu/HUD CanvasLayers into the Quest game viewport.
+          sed -i 's/^    add_child(boot_layer)$/    presentation_rig.ui_parent().add_child(boot_layer)/' "$MAIN"
+          sed -i 's/^    add_child(canvas)$/    presentation_rig.ui_parent().add_child(canvas)/' "$MAIN"
+
+          # Forward XR UI actions into the SubViewport that owns the controls.
+          sed -i 's/input_bridge.configure(presentation_rig.left_controller, presentation_rig.right_controller, presentation_rig.xr_active)/input_bridge.configure(presentation_rig.left_controller, presentation_rig.right_controller, presentation_rig.xr_active, presentation_rig.ui_input_viewport())/' "$MAIN"
+
+          sed -i '/var ui_navigation_enabled: bool = false/a\var ui_target_viewport: Viewport' "$INPUT"
+          sed -i 's/func configure(left: XRController3D, right: XRController3D, enabled: bool) -> void:/func configure(left: XRController3D, right: XRController3D, enabled: bool, ui_target: Viewport = null) -> void:/' "$INPUT"
+          sed -i '/    xr_active = enabled and left_controller != null and right_controller != null/a\    ui_target_viewport = ui_target' "$INPUT"
+          sed -i '/    Input.parse_input_event(pressed)/a\    if ui_target_viewport != null and ui_target_viewport != get_viewport():\n        ui_target_viewport.push_input(pressed)' "$INPUT"
+          sed -i '/    Input.parse_input_event(released)/a\    if ui_target_viewport != null and ui_target_viewport != get_viewport():\n        ui_target_viewport.push_input(released)' "$INPUT"
+
+          # Godot's all_resources filter does not automatically package our raw
+          # Downtown mesh/collision/route banks. Without these Quest only sees
+          # the fallback turquoise floor.
+          sed -i 's@include_filter=""@include_filter="assets/gta2/downtown/*"@' "$EXPORT"
+
+          grep -q 'presentation_rig.ui_parent().add_child(boot_layer)' "$MAIN"
+          grep -q 'presentation_rig.ui_parent().add_child(canvas)' "$MAIN"
+          grep -q 'ui_target_viewport.push_input(pressed)' "$INPUT"
+          grep -q 'include_filter="assets/gta2/downtown/\*"' "$EXPORT"
+          echo "Quest VR board patch applied."
 
       - name: Prepare Godot and Android
         shell: bash
@@ -113,7 +146,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.17.0-Quest-Tabletop-Hotfix
+          name: ViceQuest-v0.6.17.0-Quest-VRBoard
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
