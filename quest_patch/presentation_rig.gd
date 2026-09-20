@@ -217,26 +217,59 @@ void fragment() {
     popout_material.set_shader_parameter("atlas_texture", atlas_texture)
     popout_material.set_shader_parameter("min_world_y", QUEST_POP_OUT_MIN_Y)
 
+func _load_popout_mesh(coord: Vector2i) -> ArrayMesh:
+    var path: String = "res://assets/gta2/downtown/downtown_popout_%d_%d.meshbin" % [coord.x, coord.y]
+    var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+    if file == null:
+        return null
+    var vertex_count: int = int(file.get_32())
+    if vertex_count <= 0:
+        return null
+    var payload: PackedByteArray = file.get_buffer(file.get_length() - file.get_position())
+    var values: PackedFloat32Array = payload.to_float32_array()
+    if values.size() < vertex_count * 5:
+        return null
+
+    var vertices: PackedVector3Array = PackedVector3Array()
+    var uvs: PackedVector2Array = PackedVector2Array()
+    vertices.resize(vertex_count)
+    uvs.resize(vertex_count)
+    for i in range(vertex_count):
+        var base: int = i * 5
+        vertices[i] = Vector3(values[base], values[base + 1], values[base + 2])
+        uvs[i] = Vector2(values[base + 3], values[base + 4])
+
+    var arrays: Array = []
+    arrays.resize(Mesh.ARRAY_MAX)
+    arrays[Mesh.ARRAY_VERTEX] = vertices
+    arrays[Mesh.ARRAY_TEX_UV] = uvs
+    var mesh: ArrayMesh = ArrayMesh.new()
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+    return mesh
+
 func sync_popout_chunks(chunks: Dictionary, atlas_texture: Texture2D) -> void:
     if not xr_active or popout_root == null or atlas_texture == null:
         return
     _ensure_popout_material(atlas_texture)
     var desired: Dictionary = {}
     for raw_coord: Variant in chunks.keys():
-        var source: MeshInstance3D = chunks[raw_coord] as MeshInstance3D
-        if source == null or not is_instance_valid(source) or source.mesh == null:
+        var coord: Vector2i = raw_coord
+        desired[coord] = true
+        if popout_chunks.has(coord) and is_instance_valid(popout_chunks[coord]):
             continue
-        desired[raw_coord] = true
-        if popout_chunks.has(raw_coord) and is_instance_valid(popout_chunks[raw_coord]):
+
+        var pop_mesh: ArrayMesh = _load_popout_mesh(coord)
+        if pop_mesh == null:
             continue
+
         var duplicate_mesh: MeshInstance3D = MeshInstance3D.new()
-        duplicate_mesh.name = "PopOut_%s" % source.name
-        duplicate_mesh.mesh = source.mesh
+        duplicate_mesh.name = "PopOut_%d_%d" % [coord.x, coord.y]
+        duplicate_mesh.mesh = pop_mesh
         duplicate_mesh.material_override = popout_material
         duplicate_mesh.layers = QUEST_DISPLAY_LAYER
         duplicate_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
         popout_root.add_child(duplicate_mesh)
-        popout_chunks[raw_coord] = duplicate_mesh
+        popout_chunks[coord] = duplicate_mesh
 
     for raw_coord: Variant in popout_chunks.keys():
         if desired.has(raw_coord):
