@@ -1,0 +1,102 @@
+name: Build Quest APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/build-quest-apk.yml"
+      - "ViceQuestPrototype-v0.6.17.0-GTA2-Behavior-Audio-Quest-FIXED.zip.part1"
+      - "ViceQuestPrototype-v0.6.17.0-GTA2-Behavior-Audio-Quest-FIXED.zip.part2"
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: "4.5.1"
+  OPENXR_VENDORS_VERSION: "4.3.1-stable"
+  EXPORT_NAME: "ViceQuest-v0.6.17.0-Quest"
+  EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
+
+jobs:
+  quest-apk:
+    name: Quest 3 / 3S debug APK
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.5.1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Rebuild Vice Quest source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          PART1="ViceQuestPrototype-v0.6.17.0-GTA2-Behavior-Audio-Quest-FIXED.zip.part1"
+          PART2="ViceQuestPrototype-v0.6.17.0-GTA2-Behavior-Audio-Quest-FIXED.zip.part2"
+          test -s "$PART1"
+          test -s "$PART2"
+          cat "$PART1" "$PART2" > /tmp/vicequest-source.zip
+          echo "$EXPECTED_SOURCE_SHA256  /tmp/vicequest-source.zip" | sha256sum -c -
+          mkdir -p "$GITHUB_WORKSPACE/source"
+          unzip -q /tmp/vicequest-source.zip -d "$GITHUB_WORKSPACE/source"
+          PROJECT_FILE="$(find "$GITHUB_WORKSPACE/source" -name project.godot -print -quit)"
+          test -n "$PROJECT_FILE"
+          PROJECT_DIR="$(dirname "$PROJECT_FILE")"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project root: $PROJECT_DIR"
+
+      - name: Prepare Godot and Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          godot --version
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager             "platform-tools"             "platforms;android-35"             "build-tools;35.0.0"             "cmdline-tools;latest"
+
+      - name: Install OpenXR Vendors
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/openxr /tmp/openxr.zip
+          mkdir -p /tmp/openxr
+          wget -q             "https://github.com/GodotVR/godot_openxr_vendors/releases/download/${OPENXR_VENDORS_VERSION}/godotopenxrvendorsaddon.zip"             -O /tmp/openxr.zip
+          unzip -q -o /tmp/openxr.zip -d /tmp/openxr
+          mkdir -p "$PROJECT_DIR/addons"
+          rm -rf "$PROJECT_DIR/addons/godotopenxrvendors"
+          cp -a /tmp/openxr/asset/addons/godotopenxrvendors "$PROJECT_DIR/addons/"
+          test -f "$PROJECT_DIR/addons/godotopenxrvendors/plugin.gdextension"
+
+      - name: Import project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --editor --path "$PROJECT_DIR" --quit
+
+      - name: Install Android Gradle template
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path "$PROJECT_DIR" --install-android-build-template --quit
+          test -d "$PROJECT_DIR/android/build"
+
+      - name: Build Quest APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROJECT_DIR/build/android-quest"
+          godot --headless --verbose --path "$PROJECT_DIR"             --export-debug "Android Quest"             "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
+          test -s "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
+          sha256sum "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"             > "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk.sha256"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ViceQuest-v0.6.17.0-Quest-APK
+          path: |
+            ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
+            ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
+          if-no-files-found: error
+          retention-days: 14
