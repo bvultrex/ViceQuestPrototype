@@ -97,26 +97,15 @@ jobs:
 
           # Make streamed GTA2 building meshes available as a true stereoscopic
           # pop-out layer on top of the flat gameplay viewport.
-          sed -i '/    if force:/a\
-        if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\
-            presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)' "$MAIN"
+          sed -i '/    if force:/a\        if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\n            presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)' "$MAIN"
 
-          sed -i '/^func _get_block_rect/i\
-    if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\
-        presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)\
-' "$MAIN"
+          sed -i '/^func _get_block_rect/i\    if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\n        presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)\n' "$MAIN"
 
-          sed -i '/    if input_bridge != null:/i\
-    if presentation_rig != null:\
-        presentation_rig.set_popout_enabled(game_started)\
-' "$MAIN"
+          sed -i '/    if input_bridge != null:/i\    if presentation_rig != null:\n        presentation_rig.set_popout_enabled(game_started)\n' "$MAIN"
 
           # The host must execute its own respawn RPC too. Without call_local,
           # WASTED stayed visible until the next health/damage sync.
-          sed -i '/@rpc("authority", "call_remote", "reliable")/ {\
-            N\
-            /func _respawn_player(id: int, spawn: Vector3)/ s/call_remote/call_local/\
-          }' "$MAIN"
+          sed -i '/@rpc("authority", "call_remote", "reliable")/{N;/func _respawn_player(id: int, spawn: Vector3)/s/call_remote/call_local/;}' "$MAIN"
 
           # Godot's all_resources filter does not automatically package our raw
           # Downtown mesh/collision/route banks. Without these Quest only sees
