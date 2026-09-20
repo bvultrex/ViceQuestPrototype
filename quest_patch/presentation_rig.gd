@@ -138,7 +138,7 @@ func _build_quest_display() -> void:
     var backing_mesh: BoxMesh = BoxMesh.new()
     backing_mesh.size = Vector3(QUEST_PANEL_SIZE.x + 0.08, QUEST_PANEL_SIZE.y + 0.08, 0.035)
     backing.mesh = backing_mesh
-    backing.position.z = 0.025
+    backing.position.z = -0.025
     backing.layers = QUEST_DISPLAY_LAYER
     var backing_material: StandardMaterial3D = StandardMaterial3D.new()
     backing_material.albedo_color = Color("080b12")
@@ -152,7 +152,7 @@ func _build_quest_display() -> void:
     screen_mesh.size = QUEST_PANEL_SIZE
     screen.mesh = screen_mesh
     screen.layers = QUEST_DISPLAY_LAYER
-    screen.position.z = -0.001
+    screen.position.z = 0.001
     screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
     var screen_material: StandardMaterial3D = StandardMaterial3D.new()
