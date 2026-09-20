@@ -54,7 +54,7 @@ jobs:
           java -version
           godot --version
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager             "platform-tools"             "platforms;android-35"             "build-tools;35.0.0"             "cmdline-tools;latest"
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmdline-tools;latest"
 
       - name: Install OpenXR Vendors
         shell: bash
@@ -62,7 +62,7 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/openxr /tmp/openxr.zip
           mkdir -p /tmp/openxr
-          wget -q             "https://github.com/GodotVR/godot_openxr_vendors/releases/download/${OPENXR_VENDORS_VERSION}/godotopenxrvendorsaddon.zip"             -O /tmp/openxr.zip
+          wget -q "https://github.com/GodotVR/godot_openxr_vendors/releases/download/${OPENXR_VENDORS_VERSION}/godotopenxrvendorsaddon.zip" -O /tmp/openxr.zip
           unzip -q -o /tmp/openxr.zip -d /tmp/openxr
           mkdir -p "$PROJECT_DIR/addons"
           rm -rf "$PROJECT_DIR/addons/godotopenxrvendors"
@@ -75,19 +75,12 @@ jobs:
           set -euo pipefail
           godot --headless --editor --path "$PROJECT_DIR" --quit
 
-      - name: Install Android Gradle template
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path "$PROJECT_DIR" --install-android-build-template --quit
-          test -d "$PROJECT_DIR/android/build"
-
       - name: Build Quest APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$PROJECT_DIR/build/android-quest"
-          godot --headless --verbose --path "$PROJECT_DIR"             --export-debug "Android Quest"             "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
+          godot --headless --verbose --path "$PROJECT_DIR"             --install-android-build-template             --export-debug "Android Quest"             "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
           test -s "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
           sha256sum "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"             > "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk.sha256"
 
