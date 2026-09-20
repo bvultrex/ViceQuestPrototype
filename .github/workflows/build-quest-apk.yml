@@ -63,32 +63,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - "$PROJECT_DIR/scripts/presentation_rig.gd" <<'PY'
-          from pathlib import Path
-          import sys
-
-          path = Path(sys.argv[1])
-          text = path.read_text()
-
-          replacements = {
-              "const QUEST_WORLD_SCALE: float = 10.0":
-                  "const QUEST_WORLD_SCALE: float = 160.0",
-              "const QUEST_DEATH_WORLD_SCALE: float = 7.0":
-                  "const QUEST_DEATH_WORLD_SCALE: float = 112.0",
-              "const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -8.0, 8.0)":
-                  "const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -128.0, 128.0)",
-              "    xr_camera.far = 320.0":
-                  "    xr_camera.far = 960.0",
-          }
-
-          for old, new in replacements.items():
-              if old not in text:
-                  raise SystemExit(f"Expected source line missing: {old}")
-              text = text.replace(old, new)
-
-          path.write_text(text)
-          print("Quest tabletop scale hotfix applied.")
-          PY
+          FILE="$PROJECT_DIR/scripts/presentation_rig.gd"
+          test -f "$FILE"
+          grep -q 'const QUEST_WORLD_SCALE: float = 10.0' "$FILE"
+          grep -q 'const QUEST_DEATH_WORLD_SCALE: float = 7.0' "$FILE"
+          grep -q 'const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -8.0, 8.0)' "$FILE"
+          grep -q 'xr_camera.far = 320.0' "$FILE"
+          sed -i             -e 's/const QUEST_WORLD_SCALE: float = 10.0/const QUEST_WORLD_SCALE: float = 160.0/'             -e 's/const QUEST_DEATH_WORLD_SCALE: float = 7.0/const QUEST_DEATH_WORLD_SCALE: float = 112.0/'             -e 's/const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -8.0, 8.0)/const QUEST_ORIGIN_OFFSET: Vector3 = Vector3(0.0, -128.0, 128.0)/'             -e 's/xr_camera.far = 320.0/xr_camera.far = 960.0/'             "$FILE"
+          grep -q 'const QUEST_WORLD_SCALE: float = 160.0' "$FILE"
+          echo "Quest tabletop scale hotfix applied."
 
       - name: Prepare Godot and Android
         shell: bash
