@@ -64,7 +64,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet pillow
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-pil
           python3 "$GITHUB_WORKSPACE/quest_patch/build_popout_assets.py" "$PROJECT_DIR"
           test -s "$PROJECT_DIR/assets/gta2/downtown/downtown_popout_0_0.meshbin"
           test -s "$PROJECT_DIR/assets/gta2/downtown/downtown_popout_3_3.meshbin"
