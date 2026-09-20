@@ -18,6 +18,9 @@ const QUEST_PANEL_TILT_DEGREES: float = -18.0
 const QUEST_CAMERA_HEIGHT_FACTOR: float = 1.55
 const DEATH_CAMERA_HEIGHT_FACTOR: float = 0.58
 const DEATH_CAMERA_FOV: float = 34.0
+const QUEST_POP_OUT_MIN_Y: float = 0.08
+const QUEST_POP_OUT_DEPTH_BOOST: float = 1.35
+const QUEST_POP_OUT_OVERSCAN: float = 1.04
 
 var camera: Camera3D
 var game_viewport: SubViewport
@@ -36,6 +39,11 @@ var smoothed_target: Vector3 = Vector3.ZERO
 var death_focus: bool = false
 var quest_height_factor: float = 1.0
 var _focus_tween: Tween
+var board_root: Node3D
+var popout_root: Node3D
+var popout_material: ShaderMaterial
+var popout_chunks: Dictionary = {}
+var popout_enabled: bool = false
 
 func configure(start_position: Vector3, height: float, fov: float, speed: float) -> void:
     camera_height = height
@@ -127,11 +135,11 @@ func _build_quest_game_viewport() -> void:
     game_viewport.add_child(camera)
 
 func _build_quest_display() -> void:
-    var board: Node3D = Node3D.new()
-    board.name = "QuestTabletopBoard"
-    board.position = QUEST_PANEL_POSITION
-    board.rotation_degrees.x = QUEST_PANEL_TILT_DEGREES
-    xr_origin.add_child(board)
+    board_root = Node3D.new()
+    board_root.name = "QuestTabletopBoard"
+    board_root.position = QUEST_PANEL_POSITION
+    board_root.rotation_degrees.x = QUEST_PANEL_TILT_DEGREES
+    xr_origin.add_child(board_root)
 
     var backing: MeshInstance3D = MeshInstance3D.new()
     backing.name = "BoardBacking"
@@ -144,7 +152,7 @@ func _build_quest_display() -> void:
     backing_material.albedo_color = Color("080b12")
     backing_material.roughness = 0.86
     backing.material_override = backing_material
-    board.add_child(backing)
+    board_root.add_child(backing)
 
     var screen: MeshInstance3D = MeshInstance3D.new()
     screen.name = "ViceQuestScreen"
@@ -161,7 +169,119 @@ func _build_quest_display() -> void:
     screen_material.cull_mode = BaseMaterial3D.CULL_DISABLED
     screen_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
     screen.material_override = screen_material
-    board.add_child(screen)
+    board_root.add_child(screen)
+
+    popout_root = Node3D.new()
+    popout_root.name = "QuestBuildingPopOut"
+    popout_root.visible = false
+    board_root.add_child(popout_root)
+
+func _ensure_popout_material(atlas_texture: Texture2D) -> void:
+    if popout_material != null:
+        popout_material.set_shader_parameter("atlas_texture", atlas_texture)
+        return
+    var shader: Shader = Shader.new()
+    shader.code = """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_opaque;
+
+uniform sampler2D atlas_texture : source_color, filter_nearest;
+uniform vec2 focus_xz = vec2(0.0, 0.0);
+uniform vec2 half_view_world = vec2(20.0, 12.0);
+uniform float min_world_y = 0.08;
+
+varying vec3 source_position;
+
+void vertex() {
+    source_position = VERTEX;
+}
+
+void fragment() {
+    if (source_position.y < min_world_y) {
+        discard;
+    }
+    if (abs(source_position.x - focus_xz.x) > half_view_world.x ||
+        abs(source_position.z - focus_xz.y) > half_view_world.y) {
+        discard;
+    }
+    vec4 texel = texture(atlas_texture, UV);
+    if (texel.a < 0.5) {
+        discard;
+    }
+    ALBEDO = texel.rgb;
+    ALPHA = 1.0;
+}
+"""
+    popout_material = ShaderMaterial.new()
+    popout_material.shader = shader
+    popout_material.set_shader_parameter("atlas_texture", atlas_texture)
+    popout_material.set_shader_parameter("min_world_y", QUEST_POP_OUT_MIN_Y)
+
+func sync_popout_chunks(chunks: Dictionary, atlas_texture: Texture2D) -> void:
+    if not xr_active or popout_root == null or atlas_texture == null:
+        return
+    _ensure_popout_material(atlas_texture)
+    var desired: Dictionary = {}
+    for raw_coord: Variant in chunks.keys():
+        var source: MeshInstance3D = chunks[raw_coord] as MeshInstance3D
+        if source == null or not is_instance_valid(source) or source.mesh == null:
+            continue
+        desired[raw_coord] = true
+        if popout_chunks.has(raw_coord) and is_instance_valid(popout_chunks[raw_coord]):
+            continue
+        var duplicate_mesh: MeshInstance3D = MeshInstance3D.new()
+        duplicate_mesh.name = "PopOut_%s" % source.name
+        duplicate_mesh.mesh = source.mesh
+        duplicate_mesh.material_override = popout_material
+        duplicate_mesh.layers = QUEST_DISPLAY_LAYER
+        duplicate_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        popout_root.add_child(duplicate_mesh)
+        popout_chunks[raw_coord] = duplicate_mesh
+
+    for raw_coord: Variant in popout_chunks.keys():
+        if desired.has(raw_coord):
+            continue
+        var old_node: Node = popout_chunks[raw_coord]
+        if is_instance_valid(old_node):
+            old_node.queue_free()
+        popout_chunks.erase(raw_coord)
+
+    _update_popout_transform()
+
+func set_popout_enabled(active: bool) -> void:
+    popout_enabled = active
+    if popout_root != null:
+        popout_root.visible = active
+
+func _update_popout_transform() -> void:
+    if popout_root == null or camera == null:
+        return
+    var view_height: float = maxf(0.01, camera_height * QUEST_CAMERA_HEIGHT_FACTOR * quest_height_factor)
+    var half_height_world: float = view_height * tan(deg_to_rad(camera.fov * 0.5))
+    var aspect: float = float(QUEST_GAME_VIEW_SIZE.x) / float(QUEST_GAME_VIEW_SIZE.y)
+    var half_width_world: float = half_height_world * aspect
+    var planar_scale: float = QUEST_PANEL_SIZE.x / maxf(0.01, half_width_world * 2.0)
+    var depth_scale: float = planar_scale * QUEST_POP_OUT_DEPTH_BOOST
+    var focus: Vector2 = Vector2(smoothed_target.x, smoothed_target.z)
+
+    var basis: Basis = Basis(
+        Vector3(planar_scale, 0.0, 0.0),
+        Vector3(0.0, 0.0, depth_scale),
+        Vector3(0.0, -planar_scale, 0.0)
+    )
+    var origin: Vector3 = Vector3(
+        -smoothed_target.x * planar_scale,
+        smoothed_target.z * planar_scale,
+        0.006
+    )
+    popout_root.transform = Transform3D(basis, origin)
+
+    if popout_material != null:
+        popout_material.set_shader_parameter("focus_xz", focus)
+        popout_material.set_shader_parameter(
+            "half_view_world",
+            Vector2(half_width_world, half_height_world) * QUEST_POP_OUT_OVERSCAN
+        )
 
 func ui_parent() -> Node:
     if xr_active and game_viewport != null:
@@ -191,6 +311,7 @@ func _apply_quest_game_camera_pose() -> void:
     camera.global_position = smoothed_target + Vector3(0.0, height, 0.0)
     camera.global_rotation_degrees = Vector3(-90.0, 0.0, 0.0)
     camera.fov = DEATH_CAMERA_FOV if death_focus else camera_fov
+    _update_popout_transform()
 
 func set_death_focus(active: bool) -> void:
     if death_focus == active:
