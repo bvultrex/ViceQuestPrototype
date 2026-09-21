@@ -107,6 +107,12 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project root: $PROJECT_DIR"
 
+      - name: Inspect sustained Shock Gun combat context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/inspect_combat_context.py" "$PROJECT_DIR"
+
       - name: Build filtered Quest city layers
         shell: bash
         run: |
