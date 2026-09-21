@@ -467,10 +467,10 @@ func _get_shock_arc_material() -> StandardMaterial3D:
         return shock_arc_material_cache
     var material: StandardMaterial3D = StandardMaterial3D.new()
     material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    material.albedo_color = Color("ff8a18")
+    material.albedo_color = Color("38cfff")
     material.emission_enabled = true
-    material.emission = Color("ff8a18")
-    material.emission_energy_multiplier = 3.0
+    material.emission = Color("38cfff")
+    material.emission_energy_multiplier = 3.2
     material.no_depth_test = true
     shock_arc_material_cache = material
     return shock_arc_material_cache
@@ -480,10 +480,10 @@ func _get_shock_arc_core_material() -> StandardMaterial3D:
         return shock_arc_core_material_cache
     var material: StandardMaterial3D = StandardMaterial3D.new()
     material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    material.albedo_color = Color("fff36a")
+    material.albedo_color = Color("e9fbff")
     material.emission_enabled = true
-    material.emission = Color("fff36a")
-    material.emission_energy_multiplier = 4.8
+    material.emission = Color("d9f8ff")
+    material.emission_energy_multiplier = 5.2
     material.no_depth_test = true
     shock_arc_core_material_cache = material
     return shock_arc_core_material_cache
@@ -517,30 +517,32 @@ func _spawn_shock_arc(start: Vector3, end: Vector3) -> void:
     root.name = "ShockArc"
     add_child(root)
 
-    # GTA2 reference: short, chunky yellow/orange zig-zag beams in a three-prong fan.
-    var branch_count: int = 3
-    var segment_count: int = 5 if runtime_low_power else 7
-    for branch in range(branch_count):
-        var branch_bias: float = (float(branch) - 1.0) * 0.12
-        var points: Array[Vector3] = []
-        points.append(start + side * branch_bias * 0.25 + Vector3(0.0, 0.055, 0.0))
-        for i in range(1, segment_count):
-            var t: float = float(i) / float(segment_count)
-            var zig_sign: float = -1.0 if ((i + branch) % 2 == 0) else 1.0
-            var zig: float = zig_sign * (0.075 + 0.012 * distance)
-            var fan: float = branch_bias * (0.35 + 0.65 * t)
-            var lift: float = (0.018 if i % 2 == 0 else -0.010)
-            points.append(start.lerp(end, t) + side * (fan + zig) + Vector3(0.0, 0.055 + lift, 0.0))
-        points.append(end + side * branch_bias * 0.12 + Vector3(0.0, 0.055, 0.0))
+    # Original GTA2 reference: one compact blue-white electric arc with a sharp,
+    # irregular zig-zag. The orange Z seen in the screenshot is unrelated UI/art.
+    var segment_count: int = 6 if runtime_low_power else 8
+    var points: Array[Vector3] = []
+    points.append(start + Vector3(0.0, 0.055, 0.0))
+    for i in range(1, segment_count):
+        var t: float = float(i) / float(segment_count)
+        var zig_sign: float = -1.0 if (i % 2 == 0) else 1.0
+        var zig: float = zig_sign * (0.060 + 0.008 * distance)
+        var secondary: float = sin(float(i) * 2.31) * 0.025
+        var lift: float = sin(float(i) * 3.77) * 0.018
+        points.append(
+            start.lerp(end, t)
+            + side * (zig + secondary)
+            + Vector3(0.0, 0.055 + lift, 0.0)
+        )
+    points.append(end + Vector3(0.0, 0.055, 0.0))
 
-        for i in range(points.size() - 1):
-            var a: Vector3 = points[i]
-            var b: Vector3 = points[i + 1]
-            _add_shock_segment(root, a, b, 0.085, false)
-            _add_shock_segment(root, a, b, 0.035, true)
+    for i in range(points.size() - 1):
+        var a: Vector3 = points[i]
+        var b: Vector3 = points[i + 1]
+        _add_shock_segment(root, a, b, 0.060, false)
+        _add_shock_segment(root, a, b, 0.022, true)
 
     var tween: Tween = create_tween()
-    tween.tween_interval(0.14)
+    tween.tween_interval(0.11)
     tween.finished.connect(root.queue_free)
 
 '''
