@@ -175,9 +175,10 @@ main = rep(main,
 'var wanted_label: Label',
 '''var wanted_label: Label
 var wanted_head_rects: Array[TextureRect] = []
-var gta2_health_hearts: Label
-var gta2_ammo_label: Label
-var gta2_respect_bars: Dictionary = {}''',
+var gta2_health_icons: Array[TextureRect] = []
+var gta2_ammo_digit_rects: Array[TextureRect] = []
+var gta2_respect_bars: Dictionary = {}
+var gta2_hud_root: Control''',
 'HUD vars')
 
 old_build_cops = '''func _build_cops() -> void:
@@ -447,16 +448,24 @@ main = rep(main,
     _build_wasted_overlay(canvas)''',
 'apply original HUD')
 
-hud_code = r'''func _transparent_panel(control: Control) -> void:
-    if control == null or not (control is Panel):
-        return
-    var style: StyleBoxFlat = StyleBoxFlat.new()
-    style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
-    (control as Panel).add_theme_stylebox_override("panel", style)
+hud_code = r'''func _make_hud_texture(path: String, pos: Vector2, size_px: Vector2, parent: Control) -> TextureRect:
+    var rect: TextureRect = TextureRect.new()
+    rect.texture = load(path) as Texture2D
+    rect.position = pos
+    rect.size = size_px
+    rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(rect)
+    return rect
 
 func _apply_gta2_hud_style() -> void:
     if game_hud_root == null:
         return
+
+    # Keep the old HUD nodes alive for compatibility, but hide only the debug/
+    # modern presentation pieces that duplicate original GTA2 HUD information.
     if network_status_label != null:
         network_status_label.get_parent().visible = false
     if population_status_label != null:
@@ -465,124 +474,90 @@ func _apply_gta2_hud_style() -> void:
         hint_label.visible = false
     if vehicle_status_label != null:
         vehicle_status_label.get_parent().visible = false
-    if not weapon_icon_rects.is_empty():
-        var any_icon: TextureRect = weapon_icon_rects.values()[0]
-        if any_icon != null:
-            any_icon.get_parent().visible = false
-
-    gta2_respect_bars.clear()
-    var respect_root: VBoxContainer = VBoxContainer.new()
-    respect_root.name = "GTA2RespectOMeter"
-    respect_root.position = Vector2(14, 18)
-    respect_root.size = Vector2(180, 112)
-    respect_root.add_theme_constant_override("separation", 5)
-    game_hud_root.add_child(respect_root)
-    for gang_id: int in [GANG_DATA.YAKUZA, GANG_DATA.ZAIBATSU, GANG_DATA.LOONIES]:
-        var row: HBoxContainer = HBoxContainer.new()
-        row.custom_minimum_size = Vector2(174, 30)
-        respect_root.add_child(row)
-        var badge: Label = Label.new()
-        var definition: Dictionary = GANG_DATA.definition(gang_id)
-        badge.text = String(definition["name"]).substr(0, 1)
-        badge.custom_minimum_size = Vector2(28, 28)
-        badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        badge.add_theme_font_size_override("font_size", 22)
-        badge.add_theme_color_override("font_color", Color(definition["color"]))
-        row.add_child(badge)
-        var bar: ProgressBar = ProgressBar.new()
-        bar.min_value = 0.0
-        bar.max_value = 20.0
-        bar.value = 10.0
-        bar.show_percentage = false
-        bar.custom_minimum_size = Vector2(136, 18)
-        var bg: StyleBoxFlat = StyleBoxFlat.new()
-        bg.bg_color = Color(0.03, 0.03, 0.035, 0.82)
-        bg.border_color = Color(0.75, 0.75, 0.70, 0.9)
-        bg.set_border_width_all(2)
-        bar.add_theme_stylebox_override("background", bg)
-        var fill: StyleBoxFlat = StyleBoxFlat.new()
-        fill.bg_color = Color(definition["color"])
-        bar.add_theme_stylebox_override("fill", fill)
-        row.add_child(bar)
-        gta2_respect_bars[gang_id] = bar
-
     if wanted_label != null:
-        var wanted_panel: Control = wanted_label.get_parent()
-        _transparent_panel(wanted_panel)
-        wanted_panel.position = Vector2(792, 16)
-        wanted_panel.size = Vector2(204, 40)
         wanted_label.visible = false
-        wanted_head_rects.clear()
-        var head_texture: Texture2D = load("res://assets/ui/gta2/wanted_head_alert.png") as Texture2D
-        for i in range(MAX_WANTED_LEVEL):
-            var head: TextureRect = TextureRect.new()
-            head.texture = head_texture
-            head.position = Vector2(i * 32, 2)
-            head.size = Vector2(30, 30)
-            head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-            head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-            head.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-            head.visible = false
-            wanted_panel.add_child(head)
-            wanted_head_rects.append(head)
+    if health_label != null:
+        health_label.visible = false
+    if health_bar != null:
+        health_bar.visible = false
 
-    if not money_digit_rects.is_empty():
-        var money_panel: Control = money_digit_rects[0].get_parent()
-        _transparent_panel(money_panel)
-        money_panel.position = Vector2(990, 14)
-        money_panel.size = Vector2(276, 44)
-        for child in money_panel.get_children():
-            if child is Label:
-                child.visible = false
-        for i in range(money_digit_rects.size()):
-            money_digit_rects[i].position = Vector2(12 + i * 27, 4)
-            money_digit_rects[i].size = Vector2(26, 36)
+    gta2_hud_root = Control.new()
+    gta2_hud_root.name = "GTA2OriginalHud"
+    gta2_hud_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    gta2_hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_hud_root.add_child(gta2_hud_root)
 
-    if weapon_current_icon != null:
-        var combat_panel: Control = weapon_current_icon.get_parent()
-        _transparent_panel(combat_panel)
-        combat_panel.position = Vector2(1088, 66)
-        combat_panel.size = Vector2(176, 118)
-        weapon_current_icon.position = Vector2(82, 2)
-        weapon_current_icon.size = Vector2(86, 74)
-        if weapon_label != null:
-            weapon_label.visible = false
-        if health_label != null:
-            health_label.visible = false
-        if health_bar != null:
-            health_bar.visible = false
-        gta2_ammo_label = Label.new()
-        gta2_ammo_label.position = Vector2(8, 52)
-        gta2_ammo_label.size = Vector2(72, 34)
-        gta2_ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-        gta2_ammo_label.add_theme_font_size_override("font_size", 24)
-        gta2_ammo_label.add_theme_color_override("font_color", Color("e8e5bd"))
-        combat_panel.add_child(gta2_ammo_label)
-        gta2_health_hearts = Label.new()
-        gta2_health_hearts.position = Vector2(4, 3)
-        gta2_health_hearts.size = Vector2(170, 36)
-        gta2_health_hearts.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-        gta2_health_hearts.add_theme_font_size_override("font_size", 25)
-        gta2_health_hearts.add_theme_color_override("font_color", Color("e43b44"))
-        combat_panel.add_child(gta2_health_hearts)
-        if combat_message_label != null:
-            combat_message_label.reparent(game_hud_root)
-            combat_message_label.position = Vector2(330, 660)
-            combat_message_label.size = Vector2(620, 34)
-            combat_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-            combat_message_label.add_theme_font_size_override("font_size", 20)
+    # Original Downtown Respect-O-Meter sprites from wil.sty.
+    var respect_defs: Array = [
+        [GANG_DATA.LOONIES, "res://assets/ui/gta2/respect_loonies.png"],
+        [GANG_DATA.ZAIBATSU, "res://assets/ui/gta2/respect_zaibatsu.png"],
+        [GANG_DATA.YAKUZA, "res://assets/ui/gta2/respect_yakuza.png"],
+    ]
+    gta2_respect_bars.clear()
+    for i in range(respect_defs.size()):
+        var gang_id: int = int(respect_defs[i][0])
+        var base: Control = Control.new()
+        base.position = Vector2(16, 16 + i * 30)
+        base.size = Vector2(154, 26)
+        gta2_hud_root.add_child(base)
+        _make_hud_texture(String(respect_defs[i][1]), Vector2.ZERO, Vector2(142, 32), base)
+        var marker: ColorRect = ColorRect.new()
+        marker.color = Color(1.0, 1.0, 1.0, 0.95)
+        marker.position = Vector2(70, 4)
+        marker.size = Vector2(2, 22)
+        marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        base.add_child(marker)
+        gta2_respect_bars[gang_id] = marker
+
+    # Six original police heads. They are always drawn in the independent VR
+    # UI viewport, so 3D buildings cannot cover them.
+    wanted_head_rects.clear()
+    for i in range(MAX_WANTED_LEVEL):
+        var head: TextureRect = _make_hud_texture(
+            "res://assets/ui/gta2/wanted_head_alert.png",
+            Vector2(786 + i * 30, 12),
+            Vector2(28, 40),
+            gta2_hud_root
+        )
+        head.visible = false
+        wanted_head_rects.append(head)
+
+    # Original GTA2 health hearts from wil.sty.
+    gta2_health_icons.clear()
+    for i in range(5):
+        var heart: TextureRect = _make_hud_texture(
+            "res://assets/ui/gta2/heart_full.png",
+            Vector2(1102 + i * 31, 14),
+            Vector2(30, 28),
+            gta2_hud_root
+        )
+        gta2_health_icons.append(heart)
+
+    # Original compact green GTA2 digits, used for ammunition.
+    gta2_ammo_digit_rects.clear()
+    for i in range(3):
+        var digit: TextureRect = _make_hud_texture(
+            "res://assets/ui/gta2/hud_digit_0.png",
+            Vector2(1182 + i * 15, 48),
+            Vector2(12, 24),
+            gta2_hud_root
+        )
+        gta2_ammo_digit_rects.append(digit)
+
+    # Preserve the working weapon and money widgets. Their icons/digits already
+    # come from GTA2 assets; do not reparent or resize them again.
+    if weapon_label != null:
+        weapon_label.visible = false
+
+    if combat_message_label != null:
+        combat_message_label.position = Vector2(330, 662)
+        combat_message_label.size = Vector2(620, 34)
+        combat_message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
     if quest_label != null:
-        var quest_panel: Control = quest_label.get_parent()
-        _transparent_panel(quest_panel)
-        quest_panel.position = Vector2(310, 596)
-        quest_panel.size = Vector2(660, 60)
-        quest_label.position = Vector2.ZERO
-        quest_label.size = quest_panel.size
+        quest_label.position = Vector2(0, 0)
         quest_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-        quest_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-        quest_label.add_theme_font_size_override("font_size", 18)
+
     _update_gta2_respect_ui()
     _update_gta2_health_ammo_ui()
 
@@ -593,22 +568,29 @@ func _update_gta2_respect_ui() -> void:
     var respect: Dictionary = player_gang_respect.get(local_id, {})
     for raw_gang_id: Variant in gta2_respect_bars.keys():
         var gang_id: int = int(raw_gang_id)
-        var bar: ProgressBar = gta2_respect_bars[gang_id]
-        bar.value = float(clampi(int(respect.get(gang_id, 0)), -10, 10) + 10)
+        var marker: ColorRect = gta2_respect_bars[gang_id]
+        var value: int = clampi(int(respect.get(gang_id, 0)), -10, 10)
+        marker.position.x = 5.0 + (float(value + 10) / 20.0) * 132.0
+
+func _set_gta2_digit(rect: TextureRect, digit: int) -> void:
+    rect.texture = load("res://assets/ui/gta2/hud_digit_%d.png" % clampi(digit, 0, 9)) as Texture2D
 
 func _update_gta2_health_ammo_ui() -> void:
     var local_id: int = multiplayer.get_unique_id()
     var current_hp: int = int(healths.get(local_id, MAX_HP))
-    if gta2_health_hearts != null:
-        var hearts: int = clampi(ceili(float(current_hp) / (float(MAX_HP) / 5.0)), 0, 5)
-        gta2_health_hearts.text = "♥".repeat(hearts)
-    if gta2_ammo_label != null:
+    var hearts: int = clampi(ceili(float(current_hp) / (float(MAX_HP) / 5.0)), 0, 5)
+    for i in range(gta2_health_icons.size()):
+        gta2_health_icons[i].visible = i < hearts
+
+    if not gta2_ammo_digit_rects.is_empty():
         var weapon_id: int = int(player_current_weapon.get(local_id, WEAPON_DATA.PISTOL))
         var definition: Dictionary = WEAPON_DATA.definition(weapon_id)
+        var ammo_value: int = 999
         if bool(definition.get("uses_ammo", true)):
-            gta2_ammo_label.text = str(int(player_ammo_clip.get(local_id, int(definition["clip_size"]))))
-        else:
-            gta2_ammo_label.text = "∞"
+            ammo_value = clampi(int(player_ammo_clip.get(local_id, int(definition["clip_size"]))), 0, 999)
+        var text_value: String = "%03d" % ammo_value
+        for i in range(gta2_ammo_digit_rects.size()):
+            _set_gta2_digit(gta2_ammo_digit_rects[i], int(text_value.substr(i, 1)))
 
 '''
 insert_at = main.index('func _build_wasted_overlay(canvas: CanvasLayer) -> void:')
