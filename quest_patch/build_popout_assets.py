@@ -24,14 +24,20 @@ for line in source.splitlines():
         out.append(line)
         expression = stripped[len("vis.append("):-1]
 
-        # Pop-out: everything elevated except GTA2 slope families 1..44.
-        out.append(indent + f"if not (1 <= slope <= 44): pop_vis.append({expression})")
-
-        # Flat Quest viewport: roads/pavement, ground-level field lids, and all
-        # slope/ramp/stair geometry. Elevated field/building geometry is omitted.
+        # Quest pop-out is now building geometry only. Elevated GroundType-3
+        # slopes are genuine roof wedges/corners and must stay in 3D; the old
+        # blanket slope filter opened many north/east roof edges.
         out.append(
             indent
-            + f"if (1 <= slope <= 44) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
+            + f"if z >= 2 and int(bd['ground_type']) == 3: pop_vis.append({expression})"
+        )
+
+        # Flat viewport keeps traversable ramps/stairs plus ground/road lids.
+        # Elevated building slopes are omitted here because they now live only
+        # in the stereoscopic building layer.
+        out.append(
+            indent
+            + f"if ((1 <= slope <= 44) and not (z >= 2 and int(bd['ground_type']) == 3)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
         )
         vis_append_count += 1
         continue
