@@ -56,7 +56,7 @@ def sprite_tools(sty):
     return data,t,sprite,sprite_bases,sprx_size//8
 
 wil=root/'source_gta2/wil.sty'
-data,t,sprite,bases,_=sprite_tools(wil)
+data,t,sprite,bases,wcount=sprite_tools(wil)
 cari,cari_size=t['CARI']
 lookup=car_sprite_lookup(data,cari,cari_size)
 resolved={}
@@ -65,7 +65,7 @@ for name,model in VEHICLES.items():
     sprite(idx).transpose(Image.Transpose.ROTATE_270).save(vehicle_out/f'{name}.png',optimize=True)
 
 fstyle=root/'source_gta2/fstyle.sty'
-_,_,fsprite,_,fcount=sprite_tools(fstyle)
+_fdata,_ft,fsprite,_fbases,fcount=sprite_tools(fstyle)
 for idx,name in [(5,'wanted_head_idle'),(6,'wanted_head_alert')]:
     if idx>=fcount:
         raise SystemExit(f'fstyle sprite {idx} missing')
@@ -85,7 +85,7 @@ hud_sprites = {
     'player_head_3': 1333,
 }
 for name,idx in hud_sprites.items():
-    if idx >= _:
+    if idx >= wcount:
         raise SystemExit(f'wil.sty HUD sprite {idx} missing')
     sprite(idx).save(ui_out/f'{name}.png',optimize=True)
 
