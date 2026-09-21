@@ -39,12 +39,14 @@ for line in source.splitlines():
         )
 
         # Flat viewport keeps every traversable GTA2 slope plus ordinary
-        # ground/road/pavement lids. Only an exposed sloped building roof is
-        # removed from the flat layer because that exact surface is rendered in
-        # stereo above.
+        # ground/road/pavement lids. Elevated GroundType-0 lids are also kept:
+        # Downtown uses them for bridges/platforms and dropping them exposes the
+        # turquoise safety plane. GroundType-3 building roofs remain stereo-only.
+        # Only an exposed sloped building roof is removed from the flat layer
+        # because that exact surface is rendered in stereo above.
         out.append(
             indent
-            + f"if ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
+            + f"if ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (0,1,2))): flat_vis.append({expression})"
         )
         vis_append_count += 1
         continue
