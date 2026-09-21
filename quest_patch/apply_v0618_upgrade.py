@@ -331,7 +331,7 @@ main = main[:start] + new_pursuit + main[mid:]
 main = main.replace('String(gang_vehicle.get_meta("response_role", "")) == "police"',
                     'String(gang_vehicle.get_meta("response_role", "")) in ["police", "law"]')
 
-insert_anchor = '@rpc("authority", "call_local", "unreliable")\\nfunc _sync_cop_state('
+insert_anchor = '@rpc("authority", "call_local", "unreliable")\nfunc _sync_cop_state('
 sync_profile = '''@rpc("authority", "call_local", "reliable")
 func _sync_cop_profile(cop_id: int, role: String, active: bool) -> void:
     if cops.has(cop_id):
