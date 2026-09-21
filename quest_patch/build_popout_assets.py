@@ -31,7 +31,7 @@ for line in source.splitlines():
         # slope/ramp/stair geometry. Elevated field/building geometry is omitted.
         out.append(
             indent
-            + f"if (1 <= slope <= 44) or (name == 'lid' and (z <= 0 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
+            + f"if (1 <= slope <= 44) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
         )
         vis_append_count += 1
         continue
