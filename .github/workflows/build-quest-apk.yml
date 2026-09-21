@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.17.0-Quest-VRPopout-CleanBase"
+  EXPORT_NAME: "ViceQuest-v0.6.18.0-GTA2-Law-HUD-Roof"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -117,6 +117,17 @@ jobs:
           test -s "$PROJECT_DIR/assets/gta2/downtown/downtown_flat_0_0.meshbin"
           test -s "$PROJECT_DIR/assets/gta2/downtown/downtown_flat_3_3.meshbin"
 
+      - name: Extract GTA2 enforcement and HUD assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/extract_enforcement_assets.py" "$PROJECT_DIR"
+          test -s "$PROJECT_DIR/assets/vehicles/swat_van.png"
+          test -s "$PROJECT_DIR/assets/vehicles/agent_car.png"
+          test -s "$PROJECT_DIR/assets/vehicles/armed_land_roamer.png"
+          test -s "$PROJECT_DIR/assets/vehicles/land_roamer.png"
+          test -s "$PROJECT_DIR/assets/ui/gta2/wanted_head_alert.png"
+
       - name: Apply Quest VR board patch
         shell: bash
         run: |
@@ -171,6 +182,17 @@ jobs:
           grep -q '@rpc("authority", "call_local", "reliable")' "$MAIN"
           echo "Quest VR clean-base pop-out patch applied."
 
+      - name: Apply GTA2 law and HUD upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v0618_upgrade.py" "$PROJECT_DIR"
+          grep -q 'const MAX_WANTED_LEVEL: int = 6' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func _law_roles_for_level' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func _apply_gta2_hud_style' "$PROJECT_DIR/scripts/main.gd"
+          ! grep -q '_create_vehicle(18, Vector3(320.00' "$PROJECT_DIR/scripts/main.gd"
+          grep -q '"swat_van"' "$PROJECT_DIR/scripts/vehicle_data.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -201,7 +223,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.17.0-Quest-VRPopout-CleanBase
+          name: ViceQuest-v0.6.18.0-GTA2-Law-HUD-Roof
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
