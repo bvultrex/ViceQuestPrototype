@@ -71,9 +71,36 @@ for idx,name in [(5,'wanted_head_idle'),(6,'wanted_head_alert')]:
         raise SystemExit(f'fstyle sprite {idx} missing')
     fsprite(idx).save(ui_out/f'{name}.png',optimize=True)
 
+# Original Downtown HUD elements live inside wil.sty too. Extract the exact
+# assets instead of approximating them with modern Godot widgets.
+hud_sprites = {
+    'respect_loonies': 1271,
+    'respect_zaibatsu': 1273,
+    'respect_yakuza': 1274,
+    'heart_full': 1306,
+    'heart_small': 1307,
+    'player_head_0': 1330,
+    'player_head_1': 1331,
+    'player_head_2': 1332,
+    'player_head_3': 1333,
+}
+for name,idx in hud_sprites.items():
+    if idx >= _:
+        raise SystemExit(f'wil.sty HUD sprite {idx} missing')
+    sprite(idx).save(ui_out/f'{name}.png',optimize=True)
+
+# GTA2's compact green HUD digits are consecutive: 0..9 => 1316..1325.
+hud_digits = {}
+for digit in range(10):
+    idx = 1316 + digit
+    hud_digits[str(digit)] = idx
+    sprite(idx).save(ui_out/f'hud_digit_{digit}.png',optimize=True)
+
 (ui_out/'enforcement_asset_manifest.json').write_text(json.dumps({
     'vehicles':VEHICLES,
     'resolved_car_sprites':resolved,
-    'wanted_heads':{'idle':5,'alert':6}
+    'wanted_heads':{'idle':5,'alert':6},
+    'hud_sprites':hud_sprites,
+    'hud_digits':hud_digits,
 },indent=2)+'\n',encoding='utf-8')
-print('Extracted GTA2 SWAT/agent/military vehicle sprites and wanted-head HUD assets.')
+print('Extracted GTA2 enforcement vehicles plus original HUD heads, hearts, respect bars and digits.')
