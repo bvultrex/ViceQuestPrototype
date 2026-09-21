@@ -27,24 +27,67 @@ jobs:
   quest-apk:
     name: Quest 3 / 3S debug APK
     runs-on: ubuntu-24.04
-    container:
-      image: barichello/godot-ci:4.5.1
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Activate Godot CI templates and Android settings
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android command-line tools
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install system dependencies
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.config/godot"
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq             python3 python3-pil unzip wget             libfontconfig1 libx11-6 libxcursor1 libxinerama1 libgl1
+
+      - name: Install Godot 4.5.1 and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          GODOT_TAG="${GODOT_VERSION}-stable"
+          GODOT_BIN="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          GODOT_URL="https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/${GODOT_BIN}.zip"
+          TEMPLATE_URL="https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+
+          wget -q --show-progress "$GODOT_URL" -O /tmp/godot.zip
+          rm -rf /tmp/godot
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo install -m 0755 "/tmp/godot/${GODOT_BIN}" /usr/local/bin/godot
+
+          wget -q --show-progress "$TEMPLATE_URL" -O /tmp/godot-templates.tpz
+          rm -rf /tmp/godot-templates
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/godot-templates.tpz -d /tmp/godot-templates
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-          if [ -d "/root/.config/godot" ]; then
-            cp -a /root/.config/godot/. "$HOME/.config/godot/"
-          fi
-          cp -a "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          cp -a /tmp/godot-templates/templates/.             "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+
           test -f "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip"
+          godot --version
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager             "platform-tools"             "platforms;android-35"             "build-tools;35.0.0"             "cmdline-tools;latest"
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Rebuild Vice Quest source ZIP
         shell: bash
@@ -64,12 +107,10 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project root: $PROJECT_DIR"
 
-      - name: Build filtered Quest pop-out meshes
+      - name: Build filtered Quest city layers
         shell: bash
         run: |
           set -euo pipefail
-          apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-pil
           python3 "$GITHUB_WORKSPACE/quest_patch/build_popout_assets.py" "$PROJECT_DIR"
           test -s "$PROJECT_DIR/assets/gta2/downtown/downtown_popout_0_0.meshbin"
           test -s "$PROJECT_DIR/assets/gta2/downtown/downtown_popout_3_3.meshbin"
@@ -87,22 +128,18 @@ jobs:
           INPUT="$PROJECT_DIR/scripts/input_bridge.gd"
           EXPORT="$PROJECT_DIR/export_presets.cfg"
 
-          # Start OpenXR before loading/splash UI so Quest can actually see boot UI.
           sed -i '/func _ready() -> void:/,/    _build_boot_ui()/ {
             /    _configure_runtime_profile()/a\    _build_camera()
           }' "$MAIN"
 
-          # Do not create the camera a second time at the end of boot.
           sed -i '/    _set_boot_progress(0.93, "Preparing camera and multiplayer menu")/ {
             n
             /    _build_camera()/d
           }' "$MAIN"
 
-          # Route boot/menu/HUD CanvasLayers into the Quest game viewport.
           sed -i 's/^    add_child(boot_layer)$/    presentation_rig.ui_parent().add_child(boot_layer)/' "$MAIN"
           sed -i 's/^    add_child(canvas)$/    presentation_rig.ui_parent().add_child(canvas)/' "$MAIN"
 
-          # Forward XR UI actions into the SubViewport that owns the controls.
           sed -i 's/input_bridge.configure(presentation_rig.left_controller, presentation_rig.right_controller, presentation_rig.xr_active)/input_bridge.configure(presentation_rig.left_controller, presentation_rig.right_controller, presentation_rig.xr_active, presentation_rig.ui_input_viewport())/' "$MAIN"
 
           sed -i '/var ui_navigation_enabled: bool = false/a\var ui_target_viewport: Viewport' "$INPUT"
@@ -111,25 +148,18 @@ jobs:
           sed -i '/    Input.parse_input_event(pressed)/a\    if ui_target_viewport != null and ui_target_viewport != get_viewport():\n        ui_target_viewport.push_input(pressed)' "$INPUT"
           sed -i '/    Input.parse_input_event(released)/a\    if ui_target_viewport != null and ui_target_viewport != get_viewport():\n        ui_target_viewport.push_input(released)' "$INPUT"
 
-          # Quest base viewport uses a ground-only mesh so buildings are not
-          # rendered twice underneath the stereoscopic pop-out layer.
+          # Quest base viewport renders only road/pavement/ground/slope geometry.
+          # Buildings exist only in the stereoscopic pop-out layer.
           sed -i '/var path: String = "res:\/\/assets\/gta2\/downtown\/downtown_visual_%d_%d.meshbin" % \[coord.x, coord.y\]/a\    if presentation_rig != null and presentation_rig.xr_active:\n        path = "res://assets/gta2/downtown/downtown_flat_%d_%d.meshbin" % [coord.x, coord.y]' "$MAIN"
 
-          # Make streamed GTA2 building meshes available as a true stereoscopic
-          # pop-out layer on top of the flat gameplay viewport.
           sed -i '/    if force:/a\        if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\n            presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)' "$MAIN"
 
           sed -i '/^func _get_block_rect/i\    if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\n        presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)\n' "$MAIN"
 
           sed -i '/    if input_bridge != null:/i\    if presentation_rig != null:\n        presentation_rig.set_popout_enabled(game_started)\n' "$MAIN"
 
-          # The host must execute its own respawn RPC too. Without call_local,
-          # WASTED stayed visible until the next health/damage sync.
           sed -i '/@rpc("authority", "call_remote", "reliable")/{N;/func _respawn_player(id: int, spawn: Vector3)/s/call_remote/call_local/;}' "$MAIN"
 
-          # Godot's all_resources filter does not automatically package our raw
-          # Downtown mesh/collision/route banks. Without these Quest only sees
-          # the fallback turquoise floor.
           sed -i 's@include_filter=""@include_filter="assets/gta2/downtown/*"@' "$EXPORT"
 
           grep -q 'presentation_rig.ui_parent().add_child(boot_layer)' "$MAIN"
@@ -139,16 +169,7 @@ jobs:
           grep -q 'downtown_flat_%d_%d.meshbin' "$MAIN"
           grep -q 'presentation_rig.sync_popout_chunks' "$MAIN"
           grep -q '@rpc("authority", "call_local", "reliable")' "$MAIN"
-          echo "Quest VR pop-out + respawn patch applied."
-
-      - name: Prepare Godot and Android
-        shell: bash
-        run: |
-          set -euo pipefail
-          java -version
-          godot --version
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmdline-tools;latest"
+          echo "Quest VR clean-base pop-out patch applied."
 
       - name: Install OpenXR Vendors
         shell: bash
@@ -156,25 +177,24 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/openxr /tmp/openxr.zip
           mkdir -p /tmp/openxr
-          wget -q "https://github.com/GodotVR/godot_openxr_vendors/releases/download/${OPENXR_VENDORS_VERSION}/godotopenxrvendorsaddon.zip" -O /tmp/openxr.zip
+          wget -q             "https://github.com/GodotVR/godot_openxr_vendors/releases/download/${OPENXR_VENDORS_VERSION}/godotopenxrvendorsaddon.zip"             -O /tmp/openxr.zip
           unzip -q -o /tmp/openxr.zip -d /tmp/openxr
           mkdir -p "$PROJECT_DIR/addons"
           rm -rf "$PROJECT_DIR/addons/godotopenxrvendors"
           cp -a /tmp/openxr/asset/addons/godotopenxrvendors "$PROJECT_DIR/addons/"
           test -f "$PROJECT_DIR/addons/godotopenxrvendors/plugin.gdextension"
 
-      - name: Import project
+      - name: Import and build Quest APK
         shell: bash
         run: |
           set -euo pipefail
+          export ANDROID_HOME="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+
           godot --headless --editor --path "$PROJECT_DIR" --quit
 
-      - name: Build Quest APK
-        shell: bash
-        run: |
-          set -euo pipefail
           mkdir -p "$PROJECT_DIR/build/android-quest"
           godot --headless --verbose --path "$PROJECT_DIR"             --install-android-build-template             --export-debug "Android Quest"             "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
+
           test -s "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"
           sha256sum "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk"             > "$PROJECT_DIR/build/android-quest/${EXPORT_NAME}.apk.sha256"
 
