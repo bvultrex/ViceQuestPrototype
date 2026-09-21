@@ -24,6 +24,7 @@ const QUEST_POP_OUT_OVERSCAN: float = 1.04
 
 var camera: Camera3D
 var game_viewport: SubViewport
+var ui_viewport: SubViewport
 var xr_origin: XROrigin3D
 var xr_camera: XRCamera3D
 var left_controller: XRController3D
@@ -134,6 +135,14 @@ func _build_quest_game_viewport() -> void:
     camera.current = true
     game_viewport.add_child(camera)
 
+    ui_viewport = SubViewport.new()
+    ui_viewport.name = "QuestUIViewport"
+    ui_viewport.size = QUEST_GAME_VIEW_SIZE
+    ui_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    ui_viewport.transparent_bg = true
+    ui_viewport.disable_3d = true
+    add_child(ui_viewport)
+
 func _build_quest_display() -> void:
     board_root = Node3D.new()
     board_root.name = "QuestTabletopBoard"
@@ -170,6 +179,35 @@ func _build_quest_display() -> void:
     screen_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
     screen.material_override = screen_material
     board_root.add_child(screen)
+
+    var ui_screen: MeshInstance3D = MeshInstance3D.new()
+    ui_screen.name = "ViceQuestUIOverlay"
+    var ui_mesh: QuadMesh = QuadMesh.new()
+    ui_mesh.size = QUEST_PANEL_SIZE
+    ui_screen.mesh = ui_mesh
+    ui_screen.layers = QUEST_DISPLAY_LAYER
+    ui_screen.position.z = 0.004
+    ui_screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+    var ui_shader: Shader = Shader.new()
+    ui_shader.code = """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_test_disabled, depth_draw_never, blend_mix;
+
+uniform sampler2D ui_texture : source_color, filter_linear;
+
+void fragment() {
+    vec4 texel = texture(ui_texture, UV);
+    ALBEDO = texel.rgb;
+    ALPHA = texel.a;
+}
+"""
+    var ui_material: ShaderMaterial = ShaderMaterial.new()
+    ui_material.shader = ui_shader
+    ui_material.set_shader_parameter("ui_texture", ui_viewport.get_texture())
+    ui_material.render_priority = 127
+    ui_screen.material_override = ui_material
+    board_root.add_child(ui_screen)
 
     popout_root = Node3D.new()
     popout_root.name = "QuestBuildingPopOut"
@@ -317,13 +355,13 @@ func _update_popout_transform() -> void:
         )
 
 func ui_parent() -> Node:
-    if xr_active and game_viewport != null:
-        return game_viewport
+    if xr_active and ui_viewport != null:
+        return ui_viewport
     return get_parent()
 
 func ui_input_viewport() -> Viewport:
-    if xr_active and game_viewport != null:
-        return game_viewport
+    if xr_active and ui_viewport != null:
+        return ui_viewport
     return get_viewport()
 
 func follow_target(target: Vector3, delta: float) -> void:
