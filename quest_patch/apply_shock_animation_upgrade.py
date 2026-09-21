@@ -328,7 +328,7 @@ write('scripts/cop.gd',cop)
 # 5) Main: electric hit state, network reactions, authentic fire pose and visible arc.
 main=read('scripts/main.gd')
 if 'var shock_arc_material_cache:' not in main:
-    main=replace(main,'var projectile_material_cache: ShaderMaterial','var projectile_material_cache: ShaderMaterial\nvar shock_arc_material_cache: StandardMaterial3D', 'shock material cache')
+    main=replace(main,'var projectile_material_cache: ShaderMaterial','var projectile_material_cache: ShaderMaterial\nvar shock_arc_material_cache: StandardMaterial3D\nvar shock_arc_core_material_cache: StandardMaterial3D', 'shock material cache')
 
 old_stun=re.search(r'func _weapon_stun_hit\(.*?\n(?=func _melee_candidate_score)',main,re.S)
 if not old_stun: raise SystemExit('Missing shock patch anchor: stun hit function')
@@ -467,13 +467,40 @@ func _get_shock_arc_material() -> StandardMaterial3D:
         return shock_arc_material_cache
     var material: StandardMaterial3D = StandardMaterial3D.new()
     material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    material.albedo_color = Color("b9f7ff")
+    material.albedo_color = Color("ff8a18")
     material.emission_enabled = true
-    material.emission = Color("5edfff")
-    material.emission_energy_multiplier = 4.0
+    material.emission = Color("ff8a18")
+    material.emission_energy_multiplier = 3.0
     material.no_depth_test = true
     shock_arc_material_cache = material
     return shock_arc_material_cache
+
+func _get_shock_arc_core_material() -> StandardMaterial3D:
+    if shock_arc_core_material_cache != null:
+        return shock_arc_core_material_cache
+    var material: StandardMaterial3D = StandardMaterial3D.new()
+    material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    material.albedo_color = Color("fff36a")
+    material.emission_enabled = true
+    material.emission = Color("fff36a")
+    material.emission_energy_multiplier = 4.8
+    material.no_depth_test = true
+    shock_arc_core_material_cache = material
+    return shock_arc_core_material_cache
+
+func _add_shock_segment(root: Node3D, a: Vector3, b: Vector3, thickness: float, core: bool) -> void:
+    var piece_delta: Vector3 = b - a
+    var piece_length: float = piece_delta.length()
+    if piece_length <= 0.001:
+        return
+    var bolt: MeshInstance3D = MeshInstance3D.new()
+    var box: BoxMesh = BoxMesh.new()
+    box.size = Vector3(thickness, thickness, piece_length)
+    box.material = _get_shock_arc_core_material() if core else _get_shock_arc_material()
+    bolt.mesh = box
+    bolt.position = (a + b) * 0.5
+    bolt.look_at(b, Vector3.UP)
+    root.add_child(bolt)
 
 func _spawn_shock_arc(start: Vector3, end: Vector3) -> void:
     var delta: Vector3 = end - start
@@ -489,34 +516,31 @@ func _spawn_shock_arc(start: Vector3, end: Vector3) -> void:
     var root: Node3D = Node3D.new()
     root.name = "ShockArc"
     add_child(root)
-    var segment_count: int = 6 if runtime_low_power else 9
-    var points: Array[Vector3] = []
-    points.append(start + Vector3(0.0, 0.05, 0.0))
-    for i in range(1, segment_count):
-        var t: float = float(i) / float(segment_count)
-        var zig: float = sin(float(i) * 4.73 + distance * 1.31) * (0.10 + 0.025 * distance)
-        var lift: float = sin(float(i) * 7.11) * 0.055
-        points.append(start.lerp(end, t) + side * zig + Vector3(0.0, 0.05 + lift, 0.0))
-    points.append(end + Vector3(0.0, 0.05, 0.0))
 
-    for i in range(points.size() - 1):
-        var a: Vector3 = points[i]
-        var b: Vector3 = points[i + 1]
-        var piece_delta: Vector3 = b - a
-        var piece_length: float = piece_delta.length()
-        if piece_length <= 0.001:
-            continue
-        var bolt: MeshInstance3D = MeshInstance3D.new()
-        var box: BoxMesh = BoxMesh.new()
-        box.size = Vector3(0.035, 0.035, piece_length)
-        box.material = _get_shock_arc_material()
-        bolt.mesh = box
-        bolt.position = (a + b) * 0.5
-        bolt.look_at(b, Vector3.UP)
-        root.add_child(bolt)
+    # GTA2 reference: short, chunky yellow/orange zig-zag beams in a three-prong fan.
+    var branch_count: int = 3
+    var segment_count: int = 5 if runtime_low_power else 7
+    for branch in range(branch_count):
+        var branch_bias: float = (float(branch) - 1.0) * 0.12
+        var points: Array[Vector3] = []
+        points.append(start + side * branch_bias * 0.25 + Vector3(0.0, 0.055, 0.0))
+        for i in range(1, segment_count):
+            var t: float = float(i) / float(segment_count)
+            var zig_sign: float = -1.0 if ((i + branch) % 2 == 0) else 1.0
+            var zig: float = zig_sign * (0.075 + 0.012 * distance)
+            var fan: float = branch_bias * (0.35 + 0.65 * t)
+            var lift: float = (0.018 if i % 2 == 0 else -0.010)
+            points.append(start.lerp(end, t) + side * (fan + zig) + Vector3(0.0, 0.055 + lift, 0.0))
+        points.append(end + side * branch_bias * 0.12 + Vector3(0.0, 0.055, 0.0))
+
+        for i in range(points.size() - 1):
+            var a: Vector3 = points[i]
+            var b: Vector3 = points[i + 1]
+            _add_shock_segment(root, a, b, 0.085, false)
+            _add_shock_segment(root, a, b, 0.035, true)
 
     var tween: Tween = create_tween()
-    tween.tween_interval(0.085)
+    tween.tween_interval(0.14)
     tween.finished.connect(root.queue_free)
 
 '''
