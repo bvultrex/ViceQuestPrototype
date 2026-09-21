@@ -172,13 +172,12 @@ main = main.replace('const POLICE_PURSUIT_CAR_COUNT: int = 6', 'const POLICE_PUR
 main = main.replace('const MAX_WANTED_LEVEL: int = 5', 'const MAX_WANTED_LEVEL: int = 6')
 
 main = rep(main,
-'var wanted_label: Label\\nvar money_digit_rects: Array[TextureRect] = []',
+'var wanted_label: Label',
 '''var wanted_label: Label
 var wanted_head_rects: Array[TextureRect] = []
 var gta2_health_hearts: Label
 var gta2_ammo_label: Label
-var gta2_respect_bars: Dictionary[int, ProgressBar] = {}
-var money_digit_rects: Array[TextureRect] = []''',
+var gta2_respect_bars: Dictionary = {}''',
 'HUD vars')
 
 old_build_cops = '''func _build_cops() -> void:
