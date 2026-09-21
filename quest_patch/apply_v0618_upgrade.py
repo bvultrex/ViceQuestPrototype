@@ -177,6 +177,7 @@ main = rep(main,
 var wanted_head_rects: Array[TextureRect] = []
 var gta2_health_icons: Array[TextureRect] = []
 var gta2_ammo_digit_rects: Array[TextureRect] = []
+var gta2_weapon_icon: TextureRect
 var gta2_respect_bars: Dictionary = {}
 var gta2_hud_root: Control''',
 'HUD vars')
@@ -440,6 +441,13 @@ main = rep(main,
         if shooter_id > 0 and weapon_override < 0:''',
 'law shot audio')
 
+# Name the legacy weapon widgets so the GTA2 HUD can hide the duplicate strip
+# without relying on fragile child indices.
+main = main.replace('    var weapon_bar_panel: Panel = Panel.new()',
+                    '    var weapon_bar_panel: Panel = Panel.new()\n    weapon_bar_panel.name = "LegacyWeaponBarPanel"')
+main = main.replace('    var combat_panel: Panel = Panel.new()',
+                    '    var combat_panel: Panel = Panel.new()\n    combat_panel.name = "LegacyCombatPanel"')
+
 main = rep(main,
 '''    quest_label.text = "MISSIONS // Answer a ringing gang phone for work."
     _build_wasted_overlay(canvas)''',
@@ -480,6 +488,13 @@ func _apply_gta2_hud_style() -> void:
         health_label.visible = false
     if health_bar != null:
         health_bar.visible = false
+
+    var legacy_weapon_bar: Node = game_hud_root.get_node_or_null("LegacyWeaponBarPanel")
+    if legacy_weapon_bar != null:
+        legacy_weapon_bar.visible = false
+    var legacy_combat_panel: Node = game_hud_root.get_node_or_null("LegacyCombatPanel")
+    if legacy_combat_panel != null:
+        legacy_combat_panel.visible = false
 
     gta2_hud_root = Control.new()
     gta2_hud_root.name = "GTA2OriginalHud"
@@ -533,19 +548,24 @@ func _apply_gta2_hud_style() -> void:
         )
         gta2_health_icons.append(heart)
 
-    # Original compact green GTA2 digits, used for ammunition.
+    # Current weapon icon plus original compact GTA2 digits. This replaces the
+    # old 12-slot debug strip which was spanning the middle of the VR board.
+    gta2_weapon_icon = _make_hud_texture(
+        "res://assets/weapons/ui/pistol.png",
+        Vector2(1092, 44),
+        Vector2(72, 42),
+        gta2_hud_root
+    )
     gta2_ammo_digit_rects.clear()
     for i in range(3):
         var digit: TextureRect = _make_hud_texture(
             "res://assets/ui/gta2/hud_digit_0.png",
-            Vector2(1182 + i * 15, 48),
+            Vector2(1172 + i * 15, 52),
             Vector2(12, 24),
             gta2_hud_root
         )
         gta2_ammo_digit_rects.append(digit)
 
-    # Preserve the working weapon and money widgets. Their icons/digits already
-    # come from GTA2 assets; do not reparent or resize them again.
     if weapon_label != null:
         weapon_label.visible = false
 
@@ -585,6 +605,8 @@ func _update_gta2_health_ammo_ui() -> void:
     if not gta2_ammo_digit_rects.is_empty():
         var weapon_id: int = int(player_current_weapon.get(local_id, WEAPON_DATA.PISTOL))
         var definition: Dictionary = WEAPON_DATA.definition(weapon_id)
+        if gta2_weapon_icon != null:
+            gta2_weapon_icon.texture = load(String(definition["icon"])) as Texture2D
         var ammo_value: int = 999
         if bool(definition.get("uses_ammo", true)):
             ammo_value = clampi(int(player_ammo_clip.get(local_id, int(definition["clip_size"]))), 0, 999)
