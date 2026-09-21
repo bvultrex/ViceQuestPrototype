@@ -24,20 +24,27 @@ for line in source.splitlines():
         out.append(line)
         expression = stripped[len("vis.append("):-1]
 
-        # Quest pop-out is now building geometry only. Elevated GroundType-3
-        # slopes are genuine roof wedges/corners and must stay in 3D; the old
-        # blanket slope filter opened many north/east roof edges.
+        # Stability split:
+        # - keep the proven pre-0.6.18 behaviour for ramps/stairs: slope families
+        #   1..44 stay in the flat gameplay viewport, so the player can never be
+        #   occluded by a stereoscopic road/ramp surface;
+        # - add only *exposed sloped roof lids* to the 3D layer. This closes the
+        #   missing north/east roof wedges without pulling traversable slopes out
+        #   of the base map;
+        # - all non-slope geometry remains in pop-out exactly like the last good
+        #   UIOverlay build, preserving facade/wall textures and props.
         out.append(
             indent
-            + f"if z >= 2 and int(bd['ground_type']) == 3: pop_vis.append({expression})"
+            + f"if (not (1 <= slope <= 44)) or (name == 'lid' and exposed_roof): pop_vis.append({expression})"
         )
 
-        # Flat viewport keeps traversable ramps/stairs plus ground/road lids.
-        # Elevated building slopes are omitted here because they now live only
-        # in the stereoscopic building layer.
+        # Flat viewport keeps every traversable GTA2 slope plus ordinary
+        # ground/road/pavement lids. Only an exposed sloped building roof is
+        # removed from the flat layer because that exact surface is rendered in
+        # stereo above.
         out.append(
             indent
-            + f"if ((1 <= slope <= 44) and not (z >= 2 and int(bd['ground_type']) == 3)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
+            + f"if ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (1,2))): flat_vis.append({expression})"
         )
         vis_append_count += 1
         continue
