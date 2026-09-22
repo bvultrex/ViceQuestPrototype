@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.17-HeardLoops"
+  EXPORT_NAME: "ViceQuest-v0.6.18.18-HeardProps"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -275,11 +275,15 @@ jobs:
           grep -q 'mods.append("BOMB")' "$PROJECT_DIR/scripts/main.gd"
           grep -q 'func consume_radio_next()' "$PROJECT_DIR/scripts/input_bridge.gd"
           grep -q 'R-STICK UP radio' "$PROJECT_DIR/scripts/input_bridge.gd"
-          grep -q 'func _owned_loop(' "$PROJECT_DIR/scripts/audio_manager.gd"
-          grep -q 'func _service_loop(' "$PROJECT_DIR/scripts/audio_manager.gd"
-          grep -q 'car_explosion' "$PROJECT_DIR/scripts/audio_manager.gd"
-          ! grep -q '.duplicate()' "$PROJECT_DIR/scripts/audio_manager.gd"
-          test -s "$PROJECT_DIR/assets/audio/gta2/sfx/car_explosion.wav"
+          grep -q 'func note_footstep(' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'func play_fist_hit(' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'detonation' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'audio_manager.play_molotov_break' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'audio_manager.note_footstep' "$PROJECT_DIR/scripts/main.gd"
+          ! grep -q 'car_explosion' "$PROJECT_DIR/scripts/audio_manager.gd"
+          test -s "$PROJECT_DIR/assets/audio/gta2/sfx/detonation.wav"
+          test -s "$PROJECT_DIR/assets/audio/gta2/sfx/fire_loop.wav"
+          test -s "$PROJECT_DIR/assets/audio/gta2/sfx/step_0.wav"
           test -s "$PROJECT_DIR/assets/audio/gta2/beds/city.wav"
           test -s "$PROJECT_DIR/assets/audio/gta2/radio/radio_funk.wav"
           test -s "$PROJECT_DIR/assets/audio/gta2/radio/radio_night.wav"
@@ -316,7 +320,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.17-HeardLoops
+          name: ViceQuest-v0.6.18.18-HeardProps
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256

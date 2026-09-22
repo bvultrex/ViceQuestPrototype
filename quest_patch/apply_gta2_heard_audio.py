@@ -133,12 +133,24 @@ write_wav(root / "assets/audio/gta2/beds/city.wav", make_city())
 write_wav(root / "assets/audio/gta2/radio/radio_night.wav", make_night())
 write_wav(root / "assets/audio/gta2/radio/radio_funk.wav", make_funk())
 write_wav(root / "assets/audio/gta2/radio/radio_spark.wav", make_spark())
-explosion_src = here / "car_explosion.wav"
-if not explosion_src.is_file():
-    raise SystemExit("Missing quest_patch/car_explosion.wav")
-explosion_dst = root / "assets/audio/gta2/sfx/car_explosion.wav"
-explosion_dst.parent.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(explosion_src, explosion_dst)
+explosion_src = here / "sfx"
+for sample_name in (
+    "detonation.wav",
+    "molotov_break.wav",
+    "fire_loop.wav",
+    "grenade_bounce.wav",
+    "fist_hit.wav",
+    "step_0.wav",
+    "step_1.wav",
+    "step_2.wav",
+    "step_3.wav",
+):
+    src = explosion_src / sample_name
+    if not src.is_file():
+        raise SystemExit(f"Missing quest_patch/sfx/{sample_name}")
+    dst = root / "assets/audio/gta2/sfx" / sample_name
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
 shutil.copyfile(here / "audio_manager.gd", root / "scripts/audio_manager.gd")
 
 main = read("scripts/main.gd")
@@ -152,7 +164,7 @@ main = replace(
         if crash_damage > 0:
             _damage_vehicle(vehicle_id, crash_damage, vehicle.driver_id)
             if audio_manager != null:
-                audio_manager.play_vehicle_impact(vehicle.position, crash_damage >= 12)
+                audio_manager.play_vehicle_impact(vehicle.position, crash_damage >= 20)
 """,
     "crash stinger",
 )
@@ -175,6 +187,7 @@ main = replace(
                     audio_manager.note_skid(absf(driven.current_speed), steer_amount, driven.max_forward_speed)
                 else:
                     audio_manager.stop_engine()
+                    audio_manager.note_footstep(p._is_moving)
                 if input_bridge != null and input_bridge.consume_radio_next():
                     _show_combat_message(audio_manager.cycle_radio())
 """,
@@ -249,13 +262,125 @@ bridge = replace(
 )
 write("scripts/input_bridge.gd", bridge)
 
+main = read("scripts/main.gd")
+main = replace(
+    main,
+    """    if combat_fx != null and connected:
+        combat_fx.play_impact(impact_position, stun_hit)
+        combat_fx.play_knockback_dust(impact_position, 4.0)
+""",
+    """    if combat_fx != null and connected:
+        combat_fx.play_impact(impact_position, stun_hit)
+        combat_fx.play_knockback_dust(impact_position, 4.0)
+    if audio_manager != null and connected and not stun_hit:
+        audio_manager.play_fist_hit(impact_position)
+""",
+    "fist hit",
+)
+main = replace(
+    main,
+    """func _play_projectile_bounce(impact_position: Vector3, strength: float) -> void:
+    if combat_fx != null:
+        combat_fx.play_projectile_bounce(impact_position, strength)
+""",
+    """func _play_projectile_bounce(impact_position: Vector3, strength: float) -> void:
+    if combat_fx != null:
+        combat_fx.play_projectile_bounce(impact_position, strength)
+    if audio_manager != null:
+        audio_manager.play_grenade_bounce(impact_position, strength)
+""",
+    "grenade bounce",
+)
+main = replace(
+    main,
+    """func _play_molotov_burst(impact_position: Vector3) -> void:
+    var burst: AnimatedSprite3D = AnimatedSprite3D.new()
+""",
+    """func _play_molotov_burst(impact_position: Vector3) -> void:
+    if audio_manager != null:
+        audio_manager.play_molotov_break(impact_position)
+    var burst: AnimatedSprite3D = AnimatedSprite3D.new()
+""",
+    "molotov glass",
+)
+main = replace(
+    main,
+    """    node.set_meta("remaining", duration)
+    fire_zone_visuals[zone_id] = node
+""",
+    """    node.set_meta("remaining", duration)
+    fire_zone_visuals[zone_id] = node
+    if audio_manager != null:
+        audio_manager.note_fire_source("zone:%d" % zone_id, zone_position, true)
+""",
+    "fire zone on",
+)
+main = replace(
+    main,
+    """func _remove_fire_zone_visual(zone_id: int) -> void:
+    if fire_zone_visuals.has(zone_id):
+        fire_zone_visuals[zone_id].queue_free()
+        fire_zone_visuals.erase(zone_id)
+""",
+    """func _remove_fire_zone_visual(zone_id: int) -> void:
+    if fire_zone_visuals.has(zone_id):
+        fire_zone_visuals[zone_id].queue_free()
+        fire_zone_visuals.erase(zone_id)
+    if audio_manager != null:
+        audio_manager.note_fire_source("zone:%d" % zone_id, Vector3.ZERO, false)
+""",
+    "fire zone off",
+)
+main = replace(
+    main,
+    """    var target: Node3D = _burn_target_node(parts[0], int(parts[1]))
+    combat_fx.set_burning(burn_key, target, active)
+""",
+    """    var target: Node3D = _burn_target_node(parts[0], int(parts[1]))
+    combat_fx.set_burning(burn_key, target, active)
+    if audio_manager != null and target != null:
+        audio_manager.note_fire_source(burn_key, target.position, active)
+""",
+    "npc fire",
+)
+write("scripts/main.gd", main)
+
+for rel, needle in (
+    ("scripts/audio_manager.gd", "func note_footstep("),
+    ("scripts/audio_manager.gd", "func play_fist_hit("),
+    ("scripts/audio_manager.gd", "func note_fire_source("),
+    ("scripts/audio_manager.gd", '"detonation"'),
+    ("scripts/main.gd", "audio_manager.play_fist_hit"),
+    ("scripts/main.gd", "audio_manager.play_grenade_bounce"),
+    ("scripts/main.gd", "audio_manager.play_molotov_break"),
+    ("scripts/main.gd", "audio_manager.note_footstep"),
+    ("scripts/main.gd", "note_fire_source"),
+    ("scripts/main.gd", "crash_damage >= 20"),
+):
+    if needle not in read(rel):
+        raise SystemExit(f"Heard-audio patch did not land: {rel} / {needle}")
+if '"car_explosion"' in read("scripts/audio_manager.gd"):
+    raise SystemExit("explosion still uses the old boom")
+if '_hold_loop(bed_player, "city"' in read("scripts/audio_manager.gd"):
+    raise SystemExit("synth city bed is still playing")
+for rel in (
+    "assets/audio/gta2/sfx/detonation.wav",
+    "assets/audio/gta2/sfx/molotov_break.wav",
+    "assets/audio/gta2/sfx/fire_loop.wav",
+    "assets/audio/gta2/sfx/grenade_bounce.wav",
+    "assets/audio/gta2/sfx/fist_hit.wav",
+    "assets/audio/gta2/sfx/step_0.wav",
+):
+    if not (root / rel).is_file() or (root / rel).stat().st_size < 500:
+        raise SystemExit(f"Missing generated audio: {rel}")
+
+
 for rel, needle in (
     ("scripts/audio_manager.gd", "func set_ear("),
     ("scripts/audio_manager.gd", "RADIO // FUNK"),
     ("scripts/audio_manager.gd", "func note_skid("),
     ("scripts/audio_manager.gd", "func _owned_loop("),
     ("scripts/audio_manager.gd", "func _service_loop("),
-    ("scripts/audio_manager.gd", '"car_explosion"'),
     ("scripts/main.gd", "audio_manager.play_vehicle_impact"),
     ("scripts/main.gd", "audio_manager.set_ear(target)"),
     ("scripts/main.gd", "consume_radio_next()"),
@@ -271,7 +396,6 @@ for rel in (
     "assets/audio/gta2/radio/radio_night.wav",
     "assets/audio/gta2/radio/radio_funk.wav",
     "assets/audio/gta2/radio/radio_spark.wav",
-    "assets/audio/gta2/sfx/car_explosion.wav",
 ):
     if not (root / rel).is_file() or (root / rel).stat().st_size < 1000:
         raise SystemExit(f"Missing generated audio: {rel}")

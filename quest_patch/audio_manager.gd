@@ -56,6 +56,9 @@ var _ear_ready: bool = false
 var _driving: bool = false
 var _station: int = 1
 var _skid_cooldown: float = 0.0
+var _step_cooldown: float = 0.0
+var _step_index: int = 0
+var _fires: Dictionary = {}
 var _engine_wanted: bool = false
 var _radio_wanted: bool = false
 var _bed_wanted: bool = false
@@ -95,6 +98,7 @@ func cycle_radio() -> String:
 	return station_name()
 
 func _process(_delta: float) -> void:
+	_sync_fire()
 	if _engine_wanted:
 		_service_loop(engine_player)
 	if _radio_wanted:
@@ -157,15 +161,38 @@ func play_weapon(weapon_id: int, world_position: Vector3, tank_cannon: bool = fa
 	_play_heard(key, world_position, -4.0, pitch, 70.0)
 
 func play_explosion(world_position: Vector3) -> void:
-	# WIL samples 32+50 are the low boom. impact_heavy is only the metal crash,
-	# and rocket_tank is the cannon the player already hears as a weapon.
-	if _stream("car_explosion") != null:
-		_play_heard("car_explosion", world_position, 3.0, 1.0, 110.0)
-		return
-	_play_heard("impact_heavy", world_position, 1.0, 0.86, 90.0)
+	# WIL 186 is the detonation. Sample 315 is the rocket launcher and must
+	# not play on a crash or a grenade.
+	_play_heard("detonation", world_position, 2.5, 1.0, 110.0)
 
 func play_vehicle_impact(world_position: Vector3, heavy: bool = false) -> void:
-	_play_heard("impact_heavy" if heavy else "impact_light", world_position, -2.0, 0.94, 60.0)
+	# WIL 12 is the bright metal crash. WIL 13 is only the hard hit.
+	_play_heard("impact_heavy" if heavy else "impact_light", world_position, -1.0, 1.0, 48.0)
+
+func play_molotov_break(world_position: Vector3) -> void:
+	_play_heard("molotov_break", world_position, -1.0, 1.0, 26.0)
+
+func play_grenade_bounce(world_position: Vector3, strength: float) -> void:
+	_play_heard("grenade_bounce", world_position, -3.0, lerpf(0.9, 1.12, clampf(strength, 0.0, 1.0)), 18.0)
+
+func play_fist_hit(world_position: Vector3) -> void:
+	_play_heard("fist_hit", world_position, -2.0, 0.94 + randf() * 0.1, 16.0)
+
+func note_footstep(moving: bool) -> void:
+	_step_cooldown = maxf(0.0, _step_cooldown - get_process_delta_time())
+	if _driving or not moving or _step_cooldown > 0.0:
+		return
+	_step_cooldown = 0.36
+	var key: String = "step_%d" % (_step_index % 4)
+	_step_index += 1
+	_play_heard(key, _ear, -8.0, 0.96 if _step_index % 2 == 0 else 1.05, 10.0)
+
+func note_fire_source(source_key: String, world_position: Vector3, active: bool) -> void:
+	if active:
+		_fires[source_key] = world_position
+	else:
+		_fires.erase(source_key)
+	_sync_fire()
 
 func play_vehicle_door(world_position: Vector3, heavy: bool, opening: bool) -> void:
 	var key: String
@@ -221,21 +248,32 @@ func stop_engine() -> void:
 	update_bed()
 
 func update_bed() -> void:
-	if bed_player == null or radio_player == null:
+	if radio_player == null:
 		return
-	if not _driving:
-		_hold_loop(bed_player, "city", -8.0)
+	if not _driving or _station <= 0:
 		_silence(radio_player)
 		_radio_wanted = false
 		return
-	if _station <= 0:
-		_hold_loop(bed_player, "city", -12.0)
-		_silence(radio_player)
-		_radio_wanted = false
-		return
-	_hold_loop(bed_player, "city", -18.0)
 	_hold_loop(radio_player, STATION_KEYS[_station], -3.0)
 	_radio_wanted = radio_player.stream != null
+
+func _sync_fire() -> void:
+	if bed_player == null:
+		return
+	var nearest: float = 99999.0
+	if _ear_ready:
+		for source_key in _fires.keys():
+			var source_position: Vector3 = _fires[source_key]
+			var distance: float = Vector2(source_position.x, source_position.z).distance_to(Vector2(_ear.x, _ear.z))
+			if distance < nearest:
+				nearest = distance
+	if _fires.is_empty() or nearest > 22.0:
+		_bed_wanted = false
+		if bed_player.playing:
+			_silence(bed_player)
+		return
+	var nearness: float = clampf(1.0 - nearest / 22.0, 0.0, 1.0)
+	_hold_loop(bed_player, "fire_loop", lerpf(-14.0, -3.0, nearness * nearness))
 
 func _hold_loop(player: AudioStreamPlayer, key: String, volume_db: float) -> void:
 	var loaded: String = String(player.get_meta("loaded_key", ""))
