@@ -2,25 +2,27 @@
 
 Quest-Build-Repository für Vice Quest.
 
-Aktueller Stand: **v0.6.18.9-Quest-Visible**
+Aktueller Stand: **v0.6.18.10-From-185**
 
-**Neuen Chat starten:** zuerst [`CONTINUE_PROMPT.md`](CONTINUE_PROMPT.md) lesen und vollständig einfügen. Nicht ein neues Spiel bauen.
+Letzte APK, die auf Quest 3 **wirklich lief:** `ViceQuest-v0.6.18.5-Blue-ShockArc` (Commit `053bec3`).
+
+**Neuen Chat starten:** zuerst [`CONTINUE_PROMPT.md`](CONTINUE_PROMPT.md) lesen. Nicht ein neues Spiel bauen. Nicht den Tabletop-Fix aus 0.6.18.9 wiederholen.
 
 GitHub Actions rekonstruiert die Source-ZIP, wendet `quest_patch/` an und exportiert die Quest-APK.
 
+## v0.6.18.10
+
+Stellt den hardware-erprobten Quest-Blick aus 0.6.18.5 wieder her:
+
+- 16:9 SubViewport-Brett, `QUEST_DISPLAY_LAYER`, Gebäude-Popout
+- World-Mesh auf Quest: `downtown_flat_*`
+- Shock 0.6.18.7 und Audio 0.6.18.8 bleiben oben drauf
+
+0.6.18.9 war die falsche Diagnose (Tabletop statt Brett). 0.6.18.8 war schwarz, obwohl `presentation_rig.gd` noch der 18.5-Stand war.
+
 ## v0.6.18.9
 
-Quest 3 zeigte ein komplett schwarzes Bild: die XR-Kamera sah nur Layer 20 (SubViewport-Brett), und diese Textur bleibt auf Quest/GL Compatibility schwarz.
-
-Fix: wieder der hardware-erprobte Tabletop-Pfad aus v0.6.17.0.
-
-- XR-Kamera sieht die echte Downtown, `world_scale = 10`
-- Kein Layer-20-Only, keine Abhängigkeit von SubViewport-Textur
-- Gebäude bleiben im World-Mesh (`downtown_visual`), nicht nur im Popout
-- HUD/Boot wieder im Haupt-Viewport, damit OpenXR 2D compositen kann
-- Kurzer unshaded Marker vor dem Headset, bis das Spiel startet
-
-Shock 0.6.18.7 und Audio 0.6.18.8 bleiben.
+Falscher Schwarz-Fix: Tabletop `world_scale=10`, Popout tot, kein `downtown_flat`. Nicht sideloaden.
 
 ## v0.6.18.8
 
@@ -33,6 +35,8 @@ Original-GTA2-Downtown-Audio aus WIL.RAW / WIL.SDT (Sample-IDs aus `gta2_re` `so
 - Leise Downtown-Ambience: WIL 60 (Type_11), einmal als 2D-Loop, kein kurzer Nerv-Loop
 - Radio-WAVs bleiben draußen (zu groß für Quest)
 
+Auf Quest schwarz — XR war aber noch 18.5. Nicht sideloaden.
+
 ## v0.6.18.7
 
 Shock Gun Qualitätspass auf der bestehenden Godot-Basis:
@@ -42,3 +46,7 @@ Shock Gun Qualitätspass auf der bestehenden Godot-Basis:
 - Target-Hysterese gegen Flackern der Verzweigungen
 - `shocker.wav` als Loop, kein One-Shot-Spam
 - Ammo wird pro Damage-Tick verbraucht
+
+## v0.6.18.5
+
+Letzter bestätigter Quest-Lauf: blauer GTA2 Shock-Arc, 16:9-Brett, Popout-Gebäude, Wanted/HUD 0.6.18.

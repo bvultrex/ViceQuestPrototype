@@ -49,46 +49,44 @@ Referenz für GTA2-Verhalten: `CriminalRETeam/gta2_re` (GTA2 10.5). Original-Ass
 
 ### A. Letzter **hardware-erprobter** Spielstand
 
-**v0.6.17.0** — Tabletop-XR.
+**v0.6.18.5-Blue-ShockArc** — Commit `053bec3d92b897656e6dec7464a2dbf1e9988b23`  
+CI-Run: `35656574036`  
+APK-Name: `ViceQuest-v0.6.18.5-Blue-ShockArc.apk`
 
-So sah Quest aus, als Bild, Steuerung, Downtown, Gebäude, Autos, NPCs, Waffen und Multiplayer **sichtbar und spielbar** waren:
+Der User hat diese APK 2026-09-22 als **letzte, die auf Quest 3 wirklich lief** bestätigt.
 
-- `XROrigin3D.world_scale = 10`
-- Origin-Offset `(0, -8, 8)`
-- `XRCamera3D` sieht die **echte Downtown-Welt** (`downtown_visual_*.meshbin`)
-- Gameplay-`Camera3D.current = false`, sobald OpenXR läuft
-- HUD/Boot auf dem **Haupt-Viewport** (OpenXR compositet 2D)
-- `_try_enable_openxr()` **nur** auf Android
-- Kollision: `StaticBody3D` + `ConcavePolygonShape3D`, Layer 1
-- Downtown-Atlas **unshaded**
+Quest-Sicht in diesem Build:
 
-Originaldatei in der ZIP: `scripts/presentation_rig.gd` (~166 Zeilen).  
-Das ist der Pfad, den die Quest **schon bewiesen** hat.
+- 16:9 SubViewport-Brett im Raum (`QUEST_PANEL_SIZE` 1.72×0.9675, Position `(0, 1.05, -1.55)`, Tilt −18°)
+- XR-Kamera `cull_mask = QUEST_DISPLAY_LAYER` (`1 << 19`)
+- Spielwelt im `game_viewport` 1280×720
+- UI in eigenem transparenten Viewport, `depth_test_disabled`
+- World-Mesh auf Quest: `downtown_flat_*` (Straßen/Boden/Slopes)
+- Gebäude nur in der stereoskopischen Popout-Schicht (`sync_popout_chunks` ist **kein** no-op)
+- `quest_patch/presentation_rig.gd` aus diesem Commit (~466 Zeilen), SHA `0092b2202190…`
 
-### B. Letzter **CI-Stand** (noch nicht hardware-bestätigt)
+Das ist der Pfad, den die Quest **bewiesen** hat. **Nicht** der v0.6.17-Tabletop mit `world_scale = 10`.
 
-**v0.6.18.9-Quest-Visible** — Commit `8379a320f4017d6e4d782e8d60d7d6a764799c0a`
+### B. Was danach kam
 
-- GitHub Actions Run: `https://github.com/bvultrex/ViceQuestPrototype/actions/runs/35749749078`
-- Artifact: `ViceQuest-v0.6.18.9-Quest-Visible`
-- APK SHA256: `0d3c31d9374bbfb09840d41a427aad7e596cae838ee958b54aec8d0aa2eed475`
+| Version | Inhalt | Quest |
+|---|---|---|
+| 0.6.18.6 | Gehaltener Shock-Channel, Verzweigung | ungetestet / vermutlich schon Risiko |
+| 0.6.18.7 | LOS, Hysterese, `local_fire_down()` | ungetestet |
+| 0.6.18.8 | Downtown-Audio WIL 66/62/65/58/14/60 | **schwarz** (User) |
+| 0.6.18.9 | Tabletop-Rewrite, Popout tot, kein `downtown_flat` | **falsche Diagnose** — 18.5 lief mit dem Brett |
 
-Dieser Build stellt den Tabletop-Pfad aus A wieder her und **behält** Shock 0.6.18.7 + Audio 0.6.18.8.  
-**Popout ist absichtlich tot** (`sync_popout_chunks` = no-op), bis Sicht auf Hardware steht.
+`presentation_rig.gd` war von 18.5 bis 18.8 **bytegleich**. Das Schwarz von 18.8 kommt also nicht „weil SubViewport grundsätzlich tot ist“. 18.9 hat den Working-XR-Pfad zerstört.
 
-### C. Der schwarze Bildschirm (Regression, nicht der Working-Stand)
+### C. Aktueller CI-Stand
 
-`v0.6.18.1`–`v0.6.18.8` haben die Quest-Sicht auf ein isoliertes 16:9-Brett umgestellt:
+**v0.6.18.10-From-185** — 18.5-Brett wiederherstellen, Shock 18.7 + Audio 18.8 behalten.
 
-- XR-Kamera `cull_mask = 1 << 19` (nur Layer 20)
-- Spielwelt in `SubViewport` → Quad im Raum
-- UI in zweitem SubViewport
-- CI hat `downtown_flat_*` (nur Straßen) als World-Mesh genutzt, Gebäude nur im Popout
+- `quest_patch/presentation_rig.gd` = Stand `053bec3`
+- Workflow wieder mit `downtown_flat` + `QUEST_DISPLAY_LAYER`
+- Kein HeadsetBootMarker, kein Tabletop-`world_scale`
 
-Auf Quest 3 + GL Compatibility bleibt die SubViewport-Textur **schwarz**. Komplettes Headset-Schwarz.  
-**HANDOFF v0.6.18.6 beschreibt genau diese kaputte Architektur als „aktuell“. Nicht wieder einführen.**
-
-`v0.6.18.8` (Audio) ist der schwarze APK. Nicht installieren.
+Falls 18.10 noch schwarz ist: nächster Schritt ist ein **reiner 18.5-Rebuild** ohne Channel/Audio-Patches, nicht noch ein Tabletop-Experiment.
 
 ---
 
@@ -150,8 +148,10 @@ Nicht neu bauen. Erweitern.
 - v0.6.15: 3 Snapshot-RPCs/Tick statt ~1480, separate Channels, Adaptive POP
 - Host besitzt Bewegung, Waffen, HP, Fahrzeuge, Police, Gangs, Missionen, Cash
 
-### Quest-Präsentation (Working)
-Tabletop-Miniatur, Headset blickt in die echte Stadt. **Nicht** Vampire-Survivors-Fenster als einzige Sicht.
+### Quest-Präsentation (Working = 0.6.18.5)
+
+16:9-Diorama-Brett im Raum, stereoskopische Gebäude-Popouts, UI auf eigener Depth-Ebene.  
+**Nicht** Tabletop-`world_scale = 10` (das war 0.6.17 und der falsche 18.9-Fix).
 
 `main.gd` ist ~6500 Zeilen und trägt Welt, Netzwerk, HUD, Combat, Population. Nicht „aufräumen“ als Nebenbei-Refactor.
 
@@ -160,13 +160,14 @@ Tabletop-Miniatur, Headset blickt in die echte Stadt. **Nicht** Vampire-Survivor
 ## 4. Patch-Kette (Reihenfolge in CI, nicht umstellen)
 
 1. Reconstruct ZIP + SHA256  
-2. `quest_patch/build_popout_assets.py` (erzeugt popout/flat Meshes; **World bleibt visual**)  
+2. `quest_patch/build_popout_assets.py` (erzeugt popout **und** flat Meshes)  
 3. `quest_patch/extract_enforcement_assets.py`  
-4. Copy `quest_patch/presentation_rig.gd` → `scripts/presentation_rig.gd`  
+4. Copy `quest_patch/presentation_rig.gd` → `scripts/presentation_rig.gd` (**18.5-Brett, nicht Tabletop**)  
    + früher `_build_camera()` in `_ready()`  
    + `ui_parent().add_child(boot/canvas)`  
    + input_bridge `ui_target`  
-   + `sync_popout_chunks` Calls (aktuell no-op)  
+   + `downtown_flat` statt `downtown_visual` wenn `xr_active`  
+   + `sync_popout_chunks` (echt, kein no-op)  
    + respawn `call_local`  
    + export `include_filter="assets/gta2/downtown/*"`  
 5. `apply_v0618_upgrade.py` — Wanted 6, GTA2-HUD, kein Spawn-Tank  
@@ -177,13 +178,13 @@ Tabletop-Miniatur, Headset blickt in die echte Stadt. **Nicht** Vampire-Survivor
 10. OpenXR Vendors 4.3.1-stable  
 11. Godot import + `--export-debug "Android Quest"`
 
-Kein Patch darf `presentation_rig.gd` **nach** dem Copy wieder auf Layer-20/SubViewport zurückschreiben.
+Kein Patch darf `presentation_rig.gd` **nach** dem Copy auf Tabletop/`world_scale=10` umschreiben. Das 18.5-Brett ist der Working-Stand.
 
 ---
 
 ## 5. Nächste echte Spielfehler (User-Priorität)
 
-Erst wenn 0.6.18.9 auf Quest **sichtbar** ist. Dann Downtown-Importer, nicht XR-Brett.
+Erst wenn **0.6.18.10** (oder reines 18.5) auf Quest **sichtbar** ist. Dann Downtown-Importer. Das Brett nicht nochmal durch Tabletop ersetzen.
 
 1. **Innere Wände durchs Dach sichtbar** (Nord-/Ost-Innenseiten, fehlende/falsch gefilterte Roof-Lids)  
 2. **Fehlende Dächer**  
@@ -206,7 +207,7 @@ Bekannte Importer-Regeln aus `GTA2_IMPORT_NOTES.md`:
 - Collision layer-sensitiv, keine Vollsäule unter erhöhten Wänden  
 - Traffic/Spawn-Punkte behalten GMP-Z, nicht aufs höchste Lid projizieren  
 
-Stereoskopisches Gebäude-Popout **erst wieder**, wenn Tabletop sichtbar ist **und** Dächer/Slopes stimmen. Sonst kommt Schwarz oder doppelte Gebäude zurück.
+Stereoskopisches Gebäude-Popout ist in 18.5 **aktiv** und Teil des Working-Stands. Dächer/Slopes dort verbessern, das Brett nicht abschalten.
 
 ---
 
@@ -218,8 +219,9 @@ Stereoskopisches Gebäude-Popout **erst wieder**, wenn Tabletop sichtbar ist **u
 - Rampen/Treppen in die Popout-Gebäude-Schicht
 - Gebäude flat **und** stereo gleichzeitig
 - UI in derselben Depth wie Gebäude
-- XR-Kamera nur Layer 20 / SubViewport als einzige Sicht
-- `downtown_flat_*` als einziges Quest-World-Mesh
+- 18.5-Brett durch Tabletop `world_scale=10` ersetzen (18.9, falsche Schwarz-Diagnose)
+- `downtown_flat` Swap entfernen
+- `sync_popout_chunks` zum no-op machen
 - Statische Test-Cops
 - Test-Panzer am Player-Spawn
 - Source-ZIP überschreiben
@@ -233,12 +235,12 @@ Stereoskopisches Gebäude-Popout **erst wieder**, wenn Tabletop sichtbar ist **u
 
 1. `git clone` / Checkout `bvultrex/ViceQuestPrototype` `main`.  
 2. Diesen `CONTINUE_PROMPT.md` + Repo-`README.md` lesen.  
-3. **Nicht** den alten HANDOFF-Block „Quest = SubViewport-Brett“ als Zielarchitektur nehmen.  
-4. ZIP rekonstruieren, SHA prüfen, Original-`scripts/presentation_rig.gd` als XR-Referenz behalten.  
-5. Aktuellen `quest_patch/presentation_rig.gd` prüfen: `QUEST_WORLD_SCALE`, `HeadsetBootMarker`, **kein** `QUEST_DISPLAY_LAYER`.  
-6. CI-Workflow prüfen: kein `downtown_flat_%d_%d.meshbin` in `main.gd`.  
+3. **Nicht** 0.6.17-Tabletop als Quest-Working-Stand nehmen. Working ist **0.6.18.5-Blue-ShockArc**.  
+4. ZIP rekonstruieren, SHA prüfen. XR-Referenz: `quest_patch/presentation_rig.gd` aus Commit `053bec3`.  
+5. Aktuellen `presentation_rig.gd` prüfen: `QUEST_DISPLAY_LAYER`, `_build_quest_display`, **kein** `HeadsetBootMarker`.  
+6. CI-Workflow prüfen: `downtown_flat_%d_%d.meshbin` **muss** in `main.gd` landen.  
 7. Nächste Arbeit nur nach User-Report:
-   - **Noch schwarz** → OpenXR-Init / Vendors-Pairing / Origin. **Kein** neues Isolation-Brett.
+   - **18.10 noch schwarz** → reiner 18.5-Rebuild ohne Channel/Audio. Kein Tabletop.
    - **Sichtbar** → Dächer / Innenwände / Slopes / Stairs (Punkt 5).
 8. Nach Code: Workflow `EXPORT_NAME` hochzählen, commit auf `main`, CI-Artifact abwarten.  
 9. User sagt, welches Artifact er sideloaded. CI-grün ≠ Quest-grün.
@@ -250,31 +252,19 @@ Stereoskopisches Gebäude-Popout **erst wieder**, wenn Tabletop sichtbar ist **u
 Nicht das ganze Godot-Projekt nochmal. Das liegt im Repo.
 
 1. GitHub-Zugriff auf `bvultrex/ViceQuestPrototype` (Push auf `main` startet CI).  
-2. Hardware-Ergebnis von **0.6.18.9**: grünes Rechteck? Downtown mit Gebäuden? immer noch schwarz? Menü/Host?  
-3. Falls 0.6.18.9 schwarz bleibt: **Dateiname der letzten APK, die auf der Quest Bild hatte** (vermutlich `ViceQuest-v0.6.17.0-Quest.apk`).  
+2. Hardware-Ergebnis von **0.6.18.10-From-185**: 16:9-Brett sichtbar? Gebäude-Popout? Menü/Host? Shock/Audio?  
+3. Falls 18.10 schwarz bleibt: bei **0.6.18.5-Blue-ShockArc** bleiben und Channel/Audio isoliert nachziehen.  
 4. Diesen Prompt in jeden neuen Chat kleben.  
 5. Optional für Importer: originale `wil.sty` / `wil.gmp` / `WIL.RAW` / `WIL.SDT` (im Workspace oft schon als 9-teilige ZIP).
 
 ---
 
-## 9. Aktuelle Datei-SHAs auf main (`8379a32`)
+## 9. Wichtige Commits
 
-```
-quest_patch/presentation_rig.gd
-  ae520b7e9a5a9407631868019a65d3077823c48972daab5179da3c8480219149
-.github/workflows/build-quest-apk.yml
-  c24cfc821a44865cb8fbcc3a0f1fafa50a6db36d15526b30b5b7f4f2a6afb15a
-quest_patch/apply_v0618_upgrade.py
-  2b1dedafd3b529589ac3b797e58b305a64501786e2352e00a5cc1723aba9740f
-quest_patch/apply_shock_channel_upgrade.py
-  4e9f2ea7fd97c4ec86537d0bd6cf5e4eb3243bb085cc7f17cb8434a7b99501b8
-quest_patch/apply_shock_channel_quality.py
-  8fc822870068424ac7ab57af16629af494ffad7e7de9129fc3123677dcdefe58
-quest_patch/apply_shock_animation_upgrade.py
-  a320fc1ab4be3431809995f8ff3705fef840fbb2d0403f61a637c6706f270bcb
-quest_patch/apply_gta2_audio_upgrade.py
-  e974b3ca396dba335f4963914bd758d1a2547d0326e9e575da15708b38d08bb8
-```
+- Hardware-Working XR: `053bec3` `quest_patch/presentation_rig.gd` (~466 Zeilen, `QUEST_DISPLAY_LAYER`)
+- Nicht verwenden für Quest-Sicht: `8379a32` (Tabletop-Rewrite 18.9)
+
+Shock/Audio-Patches bleiben die aktuellen Dateien auf `main`. Nach jedem Push SHA selbst `sha256sum`en, nicht die alten 18.9-Werte kopieren.
 
 Direkt vom Commit laden. Nicht aus APKs zurückentwickeln.
 
@@ -284,10 +274,9 @@ Direkt vom Commit laden. Nicht aus APKs zurückentwickeln.
 
 > Bleib auf Godot ViceQuest. Kein neues Spiel.  
 > Basis: ZIP v0.6.17.0 (SHA `1554e2a9…caf3`) + `quest_patch/` auf `main`.  
-> Quest-Sicht: Tabletop wie 0.6.17, nicht SubViewport-Layer-20.  
-> Warte auf Hardware von 0.6.18.9.  
-> Wenn sichtbar: Dächer, Innenwände, Slope/Stair-Grafik und -Physik im Downtown-Importer.  
-> Shock 0.6.18.7 und Audio 0.6.18.8 nicht zurückbauen.
+> Quest-Sicht: **v0.6.18.5-Blue-ShockArc** 16:9-Brett + Popout. Nicht Tabletop 18.9.  
+> Shock 0.6.18.7 und Audio 0.6.18.8 oben drauf.  
+> Wenn 18.10 sichtbar: Dächer, Innenwände, Slope/Stair. Wenn schwarz: reines 18.5, kein Tabletop.
 
 ---
 
@@ -296,10 +285,10 @@ Direkt vom Commit laden. Nicht aus APKs zurückentwickeln.
 ```
 CONTINUE ViceQuest Godot 4.5.1 Quest APK. Repo bvultrex/ViceQuestPrototype.
 Immutable ZIP v0.6.17.0 SHA256 1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3.
-Patches only in quest_patch/. Last hardware-working XR: tabletop world_scale=10, XRCamera sees downtown_visual, HUD on main viewport.
-Do NOT rebuild as web. Do NOT isolate XR camera to layer 20 / SubViewport board (black on Quest 3 GL Compatibility).
-CI HEAD: v0.6.18.9-Quest-Visible commit 8379a32, run 35749749078, APK SHA256 0d3c31d9374bbfb09840d41a427aad7e596cae838ee958b54aec8d0aa2eed475.
+Patches only in quest_patch/. Last hardware-working APK: ViceQuest-v0.6.18.5-Blue-ShockArc (commit 053bec3).
+Working XR is the 16:9 SubViewport board + QUEST_DISPLAY_LAYER + downtown_flat + live popout. NOT tabletop world_scale=10.
+Do NOT rebuild as web. Do NOT re-apply the 0.6.18.9 tabletop rewrite (wrong black-screen diagnosis).
 Keep Shock 0.6.18.7 (held channel, local_fire_down, LOS, hysteresis) and GTA2 audio 0.6.18.8 (WIL IDs 66/62/65/58/14/60).
-Popout deferred. Next gameplay bugs after visibility: interior walls through roofs, missing roofs, wrong slope/stair gfx+physics.
+Next after visibility: interior walls through roofs, missing roofs, wrong slope/stair gfx+physics.
 Read CONTINUE_PROMPT.md in the repo before writing code.
 ```
