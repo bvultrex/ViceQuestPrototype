@@ -50,6 +50,7 @@ var popout_root: Node3D
 var popout_material: ShaderMaterial
 var popout_chunks: Dictionary = {}
 var popout_pawns: Dictionary = {}
+var popout_vehicles: Dictionary = {}
 var popout_enabled: bool = false
 
 func configure(start_position: Vector3, height: float, fov: float, speed: float) -> void:
@@ -468,6 +469,133 @@ func _clear_elevated_pawns() -> void:
                     (src as SpriteBase3D).visible = true
             old_node.queue_free()
     popout_pawns.clear()
+
+func sync_elevated_vehicles(vehicle_nodes: Dictionary) -> void:
+    if not xr_active or popout_root == null or not popout_enabled:
+        _clear_elevated_vehicles()
+        return
+
+    var desired: Dictionary = {}
+    for raw_id: Variant in vehicle_nodes.keys():
+        var id: int = int(raw_id)
+        var vehicle: Node = vehicle_nodes[raw_id]
+        if vehicle == null or not is_instance_valid(vehicle):
+            continue
+        if not vehicle.has_method("get_sprite") or not vehicle.has_method("wants_board_sprite"):
+            continue
+        var src: SpriteBase3D = vehicle.get_sprite()
+        if src == null or not is_instance_valid(src):
+            continue
+        var on_roof: bool = float(vehicle.position.y) >= ELEVATED_PAWN_MIN_Y
+        var show_body: bool = bool(vehicle.call("wants_board_sprite"))
+        if not on_roof or not show_body:
+            src.visible = show_body
+            _restore_vehicle_turret(vehicle)
+            continue
+
+        desired[id] = true
+        var holder: Node3D = popout_vehicles.get(id) as Node3D
+        if holder == null or not is_instance_valid(holder):
+            holder = _make_elevated_vehicle_holder(id)
+            popout_root.add_child(holder)
+            popout_vehicles[id] = holder
+        var body: Sprite3D = holder.get_node("Body") as Sprite3D
+        _copy_flat_sprite(body, src)
+        src.visible = false
+        _sync_elevated_turret(holder, vehicle)
+
+    for raw_id: Variant in popout_vehicles.keys():
+        if desired.has(raw_id):
+            continue
+        _free_elevated_vehicle(raw_id)
+
+func _make_flat_sprite(sprite_name: String) -> Sprite3D:
+    var clone: Sprite3D = Sprite3D.new()
+    clone.name = sprite_name
+    clone.layers = QUEST_DISPLAY_LAYER
+    clone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    clone.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+    clone.shaded = false
+    clone.centered = true
+    clone.double_sided = true
+    clone.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+    clone.alpha_scissor_threshold = 0.5
+    clone.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+    clone.render_priority = 8
+    clone.no_depth_test = false
+    return clone
+
+func _make_elevated_vehicle_holder(id: int) -> Node3D:
+    var holder: Node3D = Node3D.new()
+    holder.name = "ElevatedVehicle_%d" % id
+    holder.add_child(_make_flat_sprite("Body"))
+    holder.add_child(_make_flat_sprite("Turret"))
+    return holder
+
+func _copy_flat_sprite(clone: Sprite3D, src: SpriteBase3D) -> void:
+    if not (src is Sprite3D) or (src as Sprite3D).texture == null:
+        clone.visible = false
+        return
+    var flat: Sprite3D = src as Sprite3D
+    clone.texture = flat.texture
+    clone.pixel_size = flat.pixel_size
+    clone.modulate = flat.modulate
+    clone.flip_h = flat.flip_h
+    clone.flip_v = flat.flip_v
+    var pos: Vector3 = src.global_position
+    pos.y += ELEVATED_PAWN_Y_BIAS
+    clone.transform = Transform3D(src.global_transform.basis, pos)
+    clone.set_meta("source_sprite", src)
+    clone.visible = true
+
+func _sync_elevated_turret(holder: Node3D, vehicle: Node) -> void:
+    var turret_clone: Sprite3D = holder.get_node("Turret") as Sprite3D
+    var src: SpriteBase3D = null
+    if vehicle.has_method("get_turret_sprite"):
+        src = vehicle.get_turret_sprite()
+    var show: bool = src != null and is_instance_valid(src) and vehicle.has_method("wants_turret_sprite") and bool(vehicle.call("wants_turret_sprite"))
+    if not show:
+        turret_clone.visible = false
+        _restore_vehicle_turret(vehicle)
+        return
+    _copy_flat_sprite(turret_clone, src)
+    src.visible = false
+
+func _restore_vehicle_turret(vehicle: Node) -> void:
+    if vehicle == null or not is_instance_valid(vehicle) or not vehicle.has_method("get_turret_sprite"):
+        return
+    var src: SpriteBase3D = vehicle.get_turret_sprite()
+    if src != null and is_instance_valid(src):
+        src.visible = vehicle.has_method("wants_turret_sprite") and bool(vehicle.call("wants_turret_sprite"))
+
+func _free_elevated_vehicle(raw_id: Variant) -> void:
+    var holder: Node = popout_vehicles[raw_id]
+    if is_instance_valid(holder):
+        for sprite_name: String in ["Body", "Turret"]:
+            var clone: Node = holder.get_node_or_null(sprite_name)
+            if clone != null and clone.has_meta("source_sprite"):
+                var src: Variant = clone.get_meta("source_sprite")
+                if src is SpriteBase3D and is_instance_valid(src):
+                    _restore_hidden_vehicle_sprite(src as SpriteBase3D)
+        holder.queue_free()
+    popout_vehicles.erase(raw_id)
+
+func _restore_hidden_vehicle_sprite(src: SpriteBase3D) -> void:
+    var node: Node = src
+    while node != null and not node.has_method("wants_board_sprite"):
+        node = node.get_parent()
+    if node == null:
+        src.visible = true
+        return
+    if src.name == "OriginalGTA2Turret" and node.has_method("wants_turret_sprite"):
+        src.visible = bool(node.call("wants_turret_sprite"))
+    else:
+        src.visible = bool(node.call("wants_board_sprite"))
+
+func _clear_elevated_vehicles() -> void:
+    for raw_id: Variant in popout_vehicles.keys():
+        _free_elevated_vehicle(raw_id)
+    popout_vehicles.clear()
 
 func ui_parent() -> Node:
     if xr_active and ui_viewport != null:
