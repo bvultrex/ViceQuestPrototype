@@ -54,7 +54,7 @@ var _oneshot_cursor: int = 0
 var _ear: Vector3 = Vector3.ZERO
 var _ear_ready: bool = false
 var _driving: bool = false
-var _station: int = 1
+var _station: int = 0
 var _skid_cooldown: float = 0.0
 var _step_cooldown: float = 0.0
 var _step_index: int = 0
@@ -89,12 +89,14 @@ func set_ear(world_position: Vector3) -> void:
 	_ear_ready = true
 
 func station_name() -> String:
-	return STATIONS[_station]
+	return "RADIO OFF"
 
 func cycle_radio() -> String:
-	_station = (_station + 1) % STATIONS.size()
-	radio_player.set_meta("loaded_key", "")
-	update_bed()
+	# Licensed GTA2 stations are not in WIL.RAW. Do not play the stand-in loops.
+	_station = 0
+	if radio_player != null:
+		_silence(radio_player)
+	_radio_wanted = false
 	return station_name()
 
 func _process(_delta: float) -> void:
@@ -156,6 +158,10 @@ func play_wasted() -> void:
 	wasted_player.play()
 
 func play_weapon(weapon_id: int, world_position: Vector3, tank_cannon: bool = false) -> void:
+	# Molotov, grenade and fists have their own impact cues. Do not borrow the
+	# gadget click or the metal crash for them.
+	if weapon_id == 4 or weapon_id == 5 or weapon_id == 7:
+		return
 	var key: String = "rocket_tank" if tank_cannon else String(WEAPON_SAMPLE.get(weapon_id, "pistol"))
 	var pitch: float = 1.04 if weapon_id == 11 else 0.98
 	_play_heard(key, world_position, -4.0, pitch, 70.0)

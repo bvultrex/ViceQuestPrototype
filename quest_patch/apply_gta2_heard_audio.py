@@ -283,13 +283,20 @@ main = replace(
     if combat_fx != null:
         combat_fx.play_projectile_bounce(impact_position, strength)
 """,
-    """func _play_projectile_bounce(impact_position: Vector3, strength: float) -> void:
+    """func _play_projectile_bounce(impact_position: Vector3, strength: float, bottle: bool = false) -> void:
     if combat_fx != null:
         combat_fx.play_projectile_bounce(impact_position, strength)
-    if audio_manager != null:
+    if audio_manager != null and not bottle:
         audio_manager.play_grenade_bounce(impact_position, strength)
+
 """,
     "grenade bounce",
+)
+main = replace(
+    main,
+    "_play_projectile_bounce.rpc(next_position, clampf(velocity.length() / 9.0, 0.35, 1.0))",
+    "_play_projectile_bounce.rpc(next_position, clampf(velocity.length() / 9.0, 0.35, 1.0), delivery == \"thrown_fire\")",
+    "bounce kind",
 )
 main = replace(
     main,
