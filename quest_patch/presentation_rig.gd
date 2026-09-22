@@ -22,8 +22,9 @@ const QUEST_POP_OUT_MIN_Y: float = 0.08
 const QUEST_POP_OUT_DEPTH_BOOST: float = 1.35
 const QUEST_POP_OUT_OVERSCAN: float = 1.04
 # Walkable field roofs live at z>=2 => world Y = 1.2. Ground peds sit at 0.12.
-# Switch to a stereo pawn just before the plaza lid covers the board sprite.
-const ELEVATED_PAWN_MIN_Y: float = 0.95
+# Hardware 18.13: plazas are good; some ground-to-up stairs still hide under
+# popout overhangs before y hits 0.95. Switch a little earlier on the climb.
+const ELEVATED_PAWN_MIN_Y: float = 0.36
 const ELEVATED_PAWN_Y_BIAS: float = 0.10
 
 var camera: Camera3D
