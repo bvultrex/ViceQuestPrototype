@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""v0.6.18.16 — make GTA2 audio audible on Quest and add a car radio.
+"""v0.6.18.17 — loops the Quest can actually hear.
 
-The headset listener sits in the room, so the old 3D engine at city coordinates
-was silent. This mix is 2D from the player: engines, crashes, skids, weapons,
-a quiet city bed, and three original station loops (not the commercial GTA2
-soundtrack). Right-stick up or N cycles the station.
+18.16 one-shots (guns, skid, wasted, crash) reached the headset. Engine,
+radio and the city bed did not: they were a duplicate() of the imported
+wav, and that copy has no PCM on the Quest export. This pass owns a real
+16-bit stream, restarts it if the loop dies, and keeps the beds in the
+midrange the Quest speaker can play. Car explosions use WIL samples 32
+and 50 instead of the tank cannon.
 """
 from pathlib import Path
 import math
@@ -35,6 +37,8 @@ def replace(text: str, old: str, new: str, label: str) -> str:
 
 
 def write_wav(path: Path, samples: list[float], rate: int = 22050) -> None:
+    peak = max((abs(sample) for sample in samples), default=1.0) or 1.0
+    gain = 0.86 / peak
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(1)
@@ -42,41 +46,53 @@ def write_wav(path: Path, samples: list[float], rate: int = 22050) -> None:
         handle.setframerate(rate)
         frames = bytearray()
         for sample in samples:
-            value = max(-32767, min(32767, int(sample * 32767)))
+            value = max(-32767, min(32767, int(sample * gain * 32767)))
             frames += struct.pack("<h", value)
         handle.writeframes(frames)
 
 
 def env(index: int, total: int) -> float:
-    # Equal-power loop: fade the seam so LOOP_FORWARD does not click.
-    edge = min(index, total - 1 - index, 180)
-    return min(1.0, edge / 180.0)
+    edge = min(index, total - 1 - index, 220)
+    return min(1.0, edge / 220.0)
+
+
+def tone(freq: float, t: float, partial: float = 0.55) -> float:
+    # Quest speakers barely move air under ~150 Hz, so every note carries
+    # its octave. Otherwise a bass loop is silence in the headset.
+    return math.sin(2 * math.pi * freq * t) + partial * math.sin(2 * math.pi * freq * 2.0 * t)
 
 
 def make_city(rate: int = 22050) -> list[float]:
-    total = rate * 3
+    total = rate * 4
     rng = random.Random(22)
     noise = 0.0
     out = []
     for i in range(total):
-        noise = noise * 0.985 + (rng.random() * 2.0 - 1.0) * 0.015
+        white = rng.random() * 2.0 - 1.0
+        noise = noise * 0.82 + white * 0.18
         t = i / rate
-        hum = math.sin(2 * math.pi * 46 * t) * 0.045
-        wash = math.sin(2 * math.pi * 92 * t) * 0.012
-        out.append((noise * 0.55 + hum + wash) * env(i, total))
+        wash = math.sin(2 * math.pi * 240 * t) * 0.08 + math.sin(2 * math.pi * 480 * t) * 0.04
+        pulse = 0.55 + 0.45 * math.sin(2 * math.pi * 1.7 * t)
+        whoosh = 0.0
+        slot = i % rate
+        if slot < int(rate * 0.18):
+            whoosh = noise * (slot / (rate * 0.18)) * 0.35
+        out.append((noise * 0.42 * pulse + wash + whoosh) * env(i, total))
     return out
 
 
 def make_night(rate: int = 22050) -> list[float]:
     total = rate * 4
+    notes = (220.0, 261.6, 329.6, 440.0, 329.6, 261.6, 220.0, 196.0)
+    step = rate // 2
     out = []
     for i in range(total):
         t = i / rate
-        bass = math.sin(2 * math.pi * 55 * t) * 0.22
-        fifth = math.sin(2 * math.pi * 82.5 * t) * 0.06
-        slow = 0.65 + 0.35 * math.sin(2 * math.pi * 0.25 * t)
-        hat = (1.0 if (i % 5512) < 700 else 0.0) * math.sin(2 * math.pi * 1800 * t) * 0.015
-        out.append((bass + fifth) * slow * env(i, total) + hat)
+        note = notes[(i // step) % len(notes)]
+        beat = (i % step) / step
+        level = math.exp(-beat * 2.2)
+        hat = (1.0 if (i % step) < 500 else 0.0) * math.sin(2 * math.pi * 2400 * t) * 0.08
+        out.append((tone(note, t, 0.45) * 0.34 * level + hat) * env(i, total))
     return out
 
 
@@ -88,25 +104,28 @@ def make_funk(rate: int = 22050) -> list[float]:
         t = i / rate
         beat_pos = i % beat
         kick_t = beat_pos / rate
-        kick = math.sin(2 * math.pi * (90 - kick_t * 40) * kick_t) * math.exp(-kick_t * 14.0) * 0.55
+        kick = math.sin(2 * math.pi * (180 - kick_t * 90) * kick_t) * math.exp(-kick_t * 10.0)
+        kick += math.sin(2 * math.pi * 360 * kick_t) * math.exp(-kick_t * 18.0) * 0.35
         if (i // beat) % 2 == 1 and beat_pos < beat // 2:
-            kick *= 0.35
-        note = 49.0 if (i // (beat * 2)) % 2 == 0 else 65.4
-        bass = math.sin(2 * math.pi * note * t) * 0.18
-        hat = (1.0 if beat_pos % (beat // 2) < 500 else 0.0) * math.sin(2 * math.pi * 4200 * t) * 0.03
-        out.append((kick + bass + hat) * env(i, total))
+            kick *= 0.4
+        note = 110.0 if (i // (beat * 2)) % 2 == 0 else 146.8
+        bass = tone(note, t, 0.7) * 0.28
+        hat = (1.0 if beat_pos % (beat // 2) < 400 else 0.0) * math.sin(2 * math.pi * 3200 * t) * 0.07
+        out.append((kick * 0.7 + bass + hat) * env(i, total))
     return out
 
 
 def make_spark(rate: int = 22050) -> list[float]:
     total = rate * 2
+    notes = (440.0, 554.4, 659.3, 880.0)
+    step = rate // 4
     out = []
     for i in range(total):
         t = i / rate
-        gate = 1.0 if (i // 2756) % 2 == 0 else 0.35
-        tone = math.sin(2 * math.pi * 220 * t) * 0.08 + math.sin(2 * math.pi * 329.6 * t) * 0.05
-        pulse = 1.0 if math.sin(2 * math.pi * 8 * t) > 0 else 0.4
-        out.append(tone * gate * pulse * env(i, total))
+        note = notes[(i // step) % len(notes)]
+        gate = 1.0 if (i // step) % 2 == 0 else 0.45
+        pulse = 1.0 if math.sin(2 * math.pi * 8 * t) > 0 else 0.55
+        out.append(tone(note, t, 0.25) * 0.22 * gate * pulse * env(i, total))
     return out
 
 
@@ -114,6 +133,12 @@ write_wav(root / "assets/audio/gta2/beds/city.wav", make_city())
 write_wav(root / "assets/audio/gta2/radio/radio_night.wav", make_night())
 write_wav(root / "assets/audio/gta2/radio/radio_funk.wav", make_funk())
 write_wav(root / "assets/audio/gta2/radio/radio_spark.wav", make_spark())
+explosion_src = here / "car_explosion.wav"
+if not explosion_src.is_file():
+    raise SystemExit("Missing quest_patch/car_explosion.wav")
+explosion_dst = root / "assets/audio/gta2/sfx/car_explosion.wav"
+explosion_dst.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(explosion_src, explosion_dst)
 shutil.copyfile(here / "audio_manager.gd", root / "scripts/audio_manager.gd")
 
 main = read("scripts/main.gd")
@@ -228,6 +253,9 @@ for rel, needle in (
     ("scripts/audio_manager.gd", "func set_ear("),
     ("scripts/audio_manager.gd", "RADIO // FUNK"),
     ("scripts/audio_manager.gd", "func note_skid("),
+    ("scripts/audio_manager.gd", "func _owned_loop("),
+    ("scripts/audio_manager.gd", "func _service_loop("),
+    ("scripts/audio_manager.gd", '"car_explosion"'),
     ("scripts/main.gd", "audio_manager.play_vehicle_impact"),
     ("scripts/main.gd", "audio_manager.set_ear(target)"),
     ("scripts/main.gd", "consume_radio_next()"),
@@ -236,13 +264,16 @@ for rel, needle in (
 ):
     if needle not in read(rel):
         raise SystemExit(f"Heard-audio patch did not land: {rel} / {needle}")
+if ".duplicate()" in read("scripts/audio_manager.gd"):
+    raise SystemExit("audio_manager still duplicates streams")
 for rel in (
     "assets/audio/gta2/beds/city.wav",
     "assets/audio/gta2/radio/radio_night.wav",
     "assets/audio/gta2/radio/radio_funk.wav",
     "assets/audio/gta2/radio/radio_spark.wav",
+    "assets/audio/gta2/sfx/car_explosion.wav",
 ):
-    if not (root / rel).is_file():
+    if not (root / rel).is_file() or (root / rel).stat().st_size < 1000:
         raise SystemExit(f"Missing generated audio: {rel}")
 
 print("Quest heard-audio mix applied.")
