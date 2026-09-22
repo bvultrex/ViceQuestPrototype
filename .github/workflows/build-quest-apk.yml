@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.8-GTA2-Audio"
+  EXPORT_NAME: "ViceQuest-v0.6.18.9-Quest-Visible"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -159,10 +159,8 @@ jobs:
           sed -i '/    Input.parse_input_event(pressed)/a\    if ui_target_viewport != null and ui_target_viewport != get_viewport():\n        ui_target_viewport.push_input(pressed)' "$INPUT"
           sed -i '/    Input.parse_input_event(released)/a\    if ui_target_viewport != null and ui_target_viewport != get_viewport():\n        ui_target_viewport.push_input(released)' "$INPUT"
 
-          # Quest base viewport renders only road/pavement/ground/slope geometry.
-          # Buildings exist only in the stereoscopic pop-out layer.
-          sed -i '/var path: String = "res:\/\/assets\/gta2\/downtown\/downtown_visual_%d_%d.meshbin" % \[coord.x, coord.y\]/a\    if presentation_rig != null and presentation_rig.xr_active:\n        path = "res://assets/gta2/downtown/downtown_flat_%d_%d.meshbin" % [coord.x, coord.y]' "$MAIN"
-
+          # Buildings stay in the world on Quest. Isolating them to a SubViewport
+          # board (layer 20 only) produced a black headset image on Quest 3.
           sed -i '/    if force:/a\        if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\n            presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)' "$MAIN"
 
           sed -i '/^func _get_block_rect/i\    if presentation_rig != null and presentation_rig.xr_active and gta2_atlas_material != null:\n        presentation_rig.sync_popout_chunks(gta2_visual_chunks, gta2_atlas_material.albedo_texture)\n' "$MAIN"
@@ -177,10 +175,13 @@ jobs:
           grep -q 'presentation_rig.ui_parent().add_child(canvas)' "$MAIN"
           grep -q 'ui_target_viewport.push_input(pressed)' "$INPUT"
           grep -q 'include_filter="assets/gta2/downtown/\*"' "$EXPORT"
-          grep -q 'downtown_flat_%d_%d.meshbin' "$MAIN"
+          grep -q 'QUEST_WORLD_SCALE' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'HeadsetBootMarker' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          ! grep -q 'QUEST_DISPLAY_LAYER' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          ! grep -q 'downtown_flat_%d_%d.meshbin' "$MAIN"
           grep -q 'presentation_rig.sync_popout_chunks' "$MAIN"
           grep -q '@rpc("authority", "call_local", "reliable")' "$MAIN"
-          echo "Quest VR clean-base pop-out patch applied."
+          echo "Quest VR tabletop visibility patch applied."
 
       - name: Apply GTA2 law and HUD upgrade
         shell: bash
@@ -282,7 +283,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.8-GTA2-Audio
+          name: ViceQuest-v0.6.18.9-Quest-Visible
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256

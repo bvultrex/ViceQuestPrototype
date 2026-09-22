@@ -2,9 +2,23 @@
 
 Quest-Build-Repository für Vice Quest.
 
-Aktueller Stand: **v0.6.18.8-GTA2-Audio**
+Aktueller Stand: **v0.6.18.9-Quest-Visible**
 
 GitHub Actions rekonstruiert die Source-ZIP, wendet `quest_patch/` an und exportiert die Quest-APK.
+
+## v0.6.18.9
+
+Quest 3 zeigte ein komplett schwarzes Bild: die XR-Kamera sah nur Layer 20 (SubViewport-Brett), und diese Textur bleibt auf Quest/GL Compatibility schwarz.
+
+Fix: wieder der hardware-erprobte Tabletop-Pfad aus v0.6.17.0.
+
+- XR-Kamera sieht die echte Downtown, `world_scale = 10`
+- Kein Layer-20-Only, keine Abhängigkeit von SubViewport-Textur
+- Gebäude bleiben im World-Mesh (`downtown_visual`), nicht nur im Popout
+- HUD/Boot wieder im Haupt-Viewport, damit OpenXR 2D compositen kann
+- Kurzer unshaded Marker vor dem Headset, bis das Spiel startet
+
+Shock 0.6.18.7 und Audio 0.6.18.8 bleiben.
 
 ## v0.6.18.8
 
