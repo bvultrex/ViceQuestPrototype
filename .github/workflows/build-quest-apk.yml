@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.6-Shock-Chain"
+  EXPORT_NAME: "ViceQuest-v0.6.18.7-Shock-LOS"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -218,6 +218,19 @@ jobs:
           grep -q 'Input.is_action_pressed("attack")' "$PROJECT_DIR/scripts/main.gd"
           grep -q 'SHOCK_CHANNEL_MAX_TARGETS' "$PROJECT_DIR/scripts/main.gd"
 
+      - name: Apply Shock Gun LOS hysteresis and looped audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_shock_channel_quality.py" "$PROJECT_DIR"
+          grep -q 'func _shock_has_line_of_sight' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'SHOCK_CHANNEL_HYSTERESIS' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func _shock_consume_channel_ammo' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func _sync_shock_loop' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'wants_channel: bool = _shock_channel_should_be_active(local_id) and local_fire_down()' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func set_shock_channel' "$PROJECT_DIR/scripts/audio_manager.gd"
+          ! grep -q 'Input.is_action_pressed("attack")' "$PROJECT_DIR/scripts/main.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -248,7 +261,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.6-Shock-Chain
+          name: ViceQuest-v0.6.18.7-Shock-LOS
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
