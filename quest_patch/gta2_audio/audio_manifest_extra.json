@@ -1,0 +1,109 @@
+{
+  "source_format": "GTA2 WIL.RAW + WIL.SDT",
+  "source_note": "Downtown (WIL) PCM extracted from the user-provided original GTA2 install. Sample IDs from CriminalRETeam/gta2_re sound_obj.cpp. No guessed explosion boom ID \u2014 explosion uses verified rocket/shock car-hit 66.",
+  "pcm": {
+    "channels": 1,
+    "sample_width_bytes": 2
+  },
+  "samples": {
+    "explosion_hit": {
+      "sample_id": 66,
+      "offset": 1525306,
+      "length": 58324,
+      "rate": 22050,
+      "random_displacement": 0,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 1.323,
+      "bytes": 58368
+    },
+    "grenade_hit": {
+      "sample_id": 62,
+      "offset": 1482032,
+      "length": 7074,
+      "rate": 22050,
+      "random_displacement": 0,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 0.16,
+      "bytes": 7118
+    },
+    "molotov_hit": {
+      "sample_id": 65,
+      "offset": 1516938,
+      "length": 8368,
+      "rate": 22050,
+      "random_displacement": 0,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 0.19,
+      "bytes": 8412
+    },
+    "electrocute_victim": {
+      "sample_id": 58,
+      "offset": 1378572,
+      "length": 56576,
+      "rate": 22050,
+      "random_displacement": 2000,
+      "loop_start": 30206,
+      "loop_end": -1,
+      "duration_sec": 1.283,
+      "bytes": 56620
+    },
+    "horn_siren": {
+      "sample_id": 14,
+      "offset": 329276,
+      "length": 81654,
+      "rate": 14000,
+      "random_displacement": 0,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 2.916,
+      "bytes": 81698
+    },
+    "horn_car": {
+      "sample_id": 15,
+      "offset": 410930,
+      "length": 8610,
+      "rate": 12600,
+      "random_displacement": 0,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 0.342,
+      "bytes": 8654
+    },
+    "ambience_city": {
+      "sample_id": 60,
+      "offset": 1450404,
+      "length": 18360,
+      "rate": 6000,
+      "random_displacement": 0,
+      "loop_start": 10624,
+      "loop_end": -1,
+      "duration_sec": 1.53,
+      "bytes": 18404
+    },
+    "oil": {
+      "sample_id": 61,
+      "offset": 1468764,
+      "length": 13268,
+      "rate": 11025,
+      "random_displacement": 700,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 0.602,
+      "bytes": 13312
+    },
+    "fire_truck_gun": {
+      "sample_id": 317,
+      "offset": 5915156,
+      "length": 26624,
+      "rate": 11025,
+      "random_displacement": 0,
+      "loop_start": 0,
+      "loop_end": -1,
+      "duration_sec": 1.207,
+      "bytes": 26668
+    }
+  }
+}
