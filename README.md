@@ -4,6 +4,8 @@ Quest-Build-Repository für Vice Quest.
 
 Aktueller Stand: **v0.6.18.9-Quest-Visible**
 
+**Neuen Chat starten:** zuerst [`CONTINUE_PROMPT.md`](CONTINUE_PROMPT.md) lesen und vollständig einfügen. Nicht ein neues Spiel bauen.
+
 GitHub Actions rekonstruiert die Source-ZIP, wendet `quest_patch/` an und exportiert die Quest-APK.
 
 ## v0.6.18.9
