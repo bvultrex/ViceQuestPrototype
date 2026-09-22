@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.12-RoofShell"
+  EXPORT_NAME: "ViceQuest-v0.6.18.13-ElevatedPawns"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -211,6 +211,21 @@ jobs:
           grep -q 'func _spawn_shock_arc' "$PROJECT_DIR/scripts/main.gd"
           grep -q '"delivery": "shock_arc"' "$PROJECT_DIR/scripts/weapon_data.gd"
 
+      - name: Apply elevated pawn Quest overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_elevated_pawns.py" "$PROJECT_DIR"
+          grep -q 'func sync_elevated_pawns' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'ELEVATED_PAWN_MIN_Y' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'func get_sprite() -> SpriteBase3D:' "$PROJECT_DIR/scripts/ped_animation.gd"
+          grep -q 'ALPHA_CUT_DISCARD' "$PROJECT_DIR/scripts/ped_animation.gd"
+          grep -q 'func get_ped_sprite() -> SpriteBase3D:' "$PROJECT_DIR/scripts/player.gd"
+          grep -q 'presentation_rig.sync_elevated_pawns(players)' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'const QUEST_DISPLAY_LAYER: int = 1 << 19' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'QUEST_PANEL_POSITION: Vector3 = Vector3(0.0, 1.05, -1.55)' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          ! grep -q 'world_scale = 10' "$PROJECT_DIR/scripts/presentation_rig.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -241,7 +256,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.12-RoofShell
+          name: ViceQuest-v0.6.18.13-ElevatedPawns
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256

@@ -21,6 +21,10 @@ const DEATH_CAMERA_FOV: float = 34.0
 const QUEST_POP_OUT_MIN_Y: float = 0.08
 const QUEST_POP_OUT_DEPTH_BOOST: float = 1.35
 const QUEST_POP_OUT_OVERSCAN: float = 1.04
+# Walkable field roofs live at z>=2 => world Y = 1.2. Ground peds sit at 0.12.
+# Switch to a stereo pawn just before the plaza lid covers the board sprite.
+const ELEVATED_PAWN_MIN_Y: float = 0.95
+const ELEVATED_PAWN_Y_BIAS: float = 0.10
 
 var camera: Camera3D
 var game_viewport: SubViewport
@@ -44,6 +48,7 @@ var board_root: Node3D
 var popout_root: Node3D
 var popout_material: ShaderMaterial
 var popout_chunks: Dictionary = {}
+var popout_pawns: Dictionary = {}
 var popout_enabled: bool = false
 
 func configure(start_position: Vector3, height: float, fov: float, speed: float) -> void:
@@ -323,6 +328,8 @@ func set_popout_enabled(active: bool) -> void:
     popout_enabled = active
     if popout_root != null:
         popout_root.visible = active
+    if not active:
+        _clear_elevated_pawns()
 
 func _update_popout_transform() -> void:
     if popout_root == null or camera == null:
@@ -353,6 +360,113 @@ func _update_popout_transform() -> void:
             "half_view_world",
             Vector2(half_width_world, half_height_world) * QUEST_POP_OUT_OVERSCAN
         )
+
+func sync_elevated_pawns(player_nodes: Dictionary) -> void:
+    if not xr_active or popout_root == null or not popout_enabled:
+        _clear_elevated_pawns()
+        return
+
+    var desired: Dictionary = {}
+    for raw_id: Variant in player_nodes.keys():
+        var id: int = int(raw_id)
+        var player: Node = player_nodes[raw_id]
+        if player == null or not is_instance_valid(player):
+            continue
+        if int(player.get("vehicle_id")) != 0:
+            _restore_source_sprite(player)
+            continue
+        if not player.has_method("get_ped_sprite"):
+            continue
+        var src: SpriteBase3D = player.get_ped_sprite()
+        if src == null or not is_instance_valid(src):
+            continue
+        if float(player.position.y) < ELEVATED_PAWN_MIN_Y:
+            src.visible = true
+            continue
+
+        desired[id] = true
+        var clone: Sprite3D = popout_pawns.get(id) as Sprite3D
+        if clone == null or not is_instance_valid(clone):
+            clone = _make_elevated_pawn_sprite(id)
+            popout_root.add_child(clone)
+            popout_pawns[id] = clone
+        _copy_elevated_pawn(clone, src)
+        src.visible = false
+
+    for raw_id: Variant in popout_pawns.keys():
+        if desired.has(raw_id):
+            continue
+        _free_elevated_pawn(raw_id, player_nodes)
+
+func _make_elevated_pawn_sprite(id: int) -> Sprite3D:
+    var clone: Sprite3D = Sprite3D.new()
+    clone.name = "ElevatedPawn_%d" % id
+    clone.layers = QUEST_DISPLAY_LAYER
+    clone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    clone.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+    clone.shaded = false
+    clone.centered = true
+    clone.double_sided = true
+    clone.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+    clone.alpha_scissor_threshold = 0.5
+    clone.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+    clone.render_priority = 8
+    clone.no_depth_test = false
+    return clone
+
+func _copy_elevated_pawn(clone: Sprite3D, src: SpriteBase3D) -> void:
+    var tex: Texture2D = null
+    if src is AnimatedSprite3D:
+        var anim_sprite: AnimatedSprite3D = src as AnimatedSprite3D
+        var frames: SpriteFrames = anim_sprite.sprite_frames
+        if frames != null and frames.has_animation(anim_sprite.animation):
+            tex = frames.get_frame_texture(anim_sprite.animation, anim_sprite.frame)
+    elif src is Sprite3D:
+        tex = (src as Sprite3D).texture
+    if tex == null:
+        clone.visible = false
+        return
+    clone.texture = tex
+    clone.pixel_size = src.pixel_size
+    clone.modulate = src.modulate
+    clone.flip_h = src.flip_h
+    clone.flip_v = src.flip_v
+    var pos: Vector3 = src.global_position
+    pos.y += ELEVATED_PAWN_Y_BIAS
+    # Local space of popout_root is gameplay-world XYZ, same as popout meshes.
+    clone.transform = Transform3D(src.global_transform.basis, pos)
+    clone.set_meta("source_sprite", src)
+    clone.visible = true
+
+func _restore_source_sprite(player: Node) -> void:
+    if player == null or not is_instance_valid(player) or not player.has_method("get_ped_sprite"):
+        return
+    var src: SpriteBase3D = player.get_ped_sprite()
+    if src != null and is_instance_valid(src):
+        src.visible = true
+
+func _free_elevated_pawn(raw_id: Variant, player_nodes: Dictionary) -> void:
+    var old_node: Node = popout_pawns[raw_id]
+    if is_instance_valid(old_node):
+        if old_node.has_meta("source_sprite"):
+            var src: Variant = old_node.get_meta("source_sprite")
+            if src is SpriteBase3D and is_instance_valid(src):
+                (src as SpriteBase3D).visible = true
+        old_node.queue_free()
+    popout_pawns.erase(raw_id)
+    if player_nodes.has(raw_id):
+        _restore_source_sprite(player_nodes[raw_id])
+
+func _clear_elevated_pawns() -> void:
+    for raw_id: Variant in popout_pawns.keys():
+        var old_node: Node = popout_pawns[raw_id]
+        if is_instance_valid(old_node):
+            if old_node.has_meta("source_sprite"):
+                var src: Variant = old_node.get_meta("source_sprite")
+                if src is SpriteBase3D and is_instance_valid(src):
+                    (src as SpriteBase3D).visible = true
+            old_node.queue_free()
+    popout_pawns.clear()
 
 func ui_parent() -> Node:
     if xr_active and ui_viewport != null:
