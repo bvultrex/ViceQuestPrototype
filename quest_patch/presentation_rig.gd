@@ -30,6 +30,7 @@ var xr_camera: XRCamera3D
 var left_controller: XRController3D
 var right_controller: XRController3D
 var xr_interface: XRInterface
+var gameplay_audio_listener: AudioListener3D
 var xr_active: bool = false
 var mode: PresentationMode = PresentationMode.DESKTOP_TOPDOWN
 var camera_height: float = 18.0
@@ -56,11 +57,29 @@ func configure(start_position: Vector3, height: float, fov: float, speed: float)
 
     if OS.has_feature("android") and _try_enable_openxr():
         mode = PresentationMode.VR_DIORAMA
+        _build_gameplay_audio_listener()
         _apply_quest_game_camera_pose()
+        _update_gameplay_audio_listener()
         return
 
     _build_desktop_camera()
     _apply_camera_pose()
+
+func _build_gameplay_audio_listener() -> void:
+    if gameplay_audio_listener != null:
+        return
+    gameplay_audio_listener = AudioListener3D.new()
+    gameplay_audio_listener.name = "QuestGameplayAudioListener"
+    add_child(gameplay_audio_listener)
+    gameplay_audio_listener.make_current()
+
+func _update_gameplay_audio_listener() -> void:
+    if gameplay_audio_listener == null:
+        return
+    # The XR camera is room-anchored at the initial game position while the
+    # gameplay itself moves inside a SubViewport.  Without a dedicated listener,
+    # 3D sound attenuation therefore stays pinned to the spawn point.
+    gameplay_audio_listener.global_position = smoothed_target + Vector3(0.0, 0.75, 0.0)
 
 func _build_desktop_camera() -> void:
     camera = Camera3D.new()
@@ -371,6 +390,7 @@ func follow_target(target: Vector3, delta: float) -> void:
 
     if xr_active:
         _apply_quest_game_camera_pose()
+        _update_gameplay_audio_listener()
         return
 
     global_position = smoothed_target
