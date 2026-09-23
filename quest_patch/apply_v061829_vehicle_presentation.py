@@ -238,41 +238,16 @@ siren_update = r'''func update_police_sirens(vehicles: Dictionary) -> void:
 '''
 audio = replace_func(audio, "update_police_sirens", siren_update)
 
-# Make traffic and siren updates run both on foot and while driving.
-old_audio_block = '''            if audio_manager != null:
-                audio_manager.set_ear(target)
-                if player_vehicle.has(local_id) and vehicles.has(player_vehicle[local_id]):
-                    var driven: ViceQuestVehicle = vehicles[player_vehicle[local_id]]
-                    audio_manager.update_local_vehicle(driven)
-                    var steer_amount: float = 0.0
-                    if inputs.has(local_id):
-                        steer_amount = absf((inputs[local_id] as Vector2).x)
-                    audio_manager.note_skid(absf(driven.current_speed), steer_amount, driven.max_forward_speed)
-                else:
-                    audio_manager.update_nearby_traffic(vehicles)
-                    audio_manager.update_police_sirens(vehicles)
-                    audio_manager.note_footstep(p._is_moving)
-                if input_bridge != null and input_bridge.consume_radio_next():
-                    _show_combat_message(audio_manager.cycle_radio())
-'''
-new_audio_block = '''            if audio_manager != null:
-                audio_manager.set_ear(target)
-                if player_vehicle.has(local_id) and vehicles.has(player_vehicle[local_id]):
-                    var driven: ViceQuestVehicle = vehicles[player_vehicle[local_id]]
-                    audio_manager.update_local_vehicle(driven)
-                    var steer_amount: float = 0.0
-                    if inputs.has(local_id):
-                        steer_amount = absf((inputs[local_id] as Vector2).x)
-                    audio_manager.note_skid(absf(driven.current_speed), steer_amount, driven.max_forward_speed)
-                else:
-                    audio_manager.stop_engine()
-                    audio_manager.note_footstep(p._is_moving)
-                audio_manager.update_nearby_traffic(vehicles)
-                audio_manager.update_police_sirens(vehicles)
-                if input_bridge != null and input_bridge.consume_radio_next():
-                    _show_combat_message(audio_manager.cycle_radio())
-'''
-main = must_replace(main, old_audio_block, new_audio_block, "always-on traffic/siren audio")
+# Make traffic and siren updates run while driving too. The on-foot branch
+# already calls both functions after v0.6.18.28.
+main = must_replace(
+    main,
+    "                    audio_manager.update_local_vehicle(driven)\n",
+    "                    audio_manager.update_local_vehicle(driven)\n"
+    "                    audio_manager.update_nearby_traffic(vehicles)\n"
+    "                    audio_manager.update_police_sirens(vehicles)\n",
+    "traffic/siren while driving",
+)
 
 # ---------------------------------------------------------------------------
 # 2) Reliable response FX and genuinely visible Cop exit.
