@@ -6,6 +6,98 @@ import sys
 root = Path(sys.argv[1]).resolve()
 builder = root / "tools" / "rebuild_gta2_runtime_assets.py"
 source = builder.read_text(encoding="utf-8")
+map_path = root / "assets" / "gta2" / "downtown" / "downtown_exact_map.json"
+map_data = json.loads(map_path.read_text(encoding="utf-8"))
+
+
+def _block_at(columns, block_defs, x, y, z):
+    column = columns.get((x, y))
+    if column is None:
+        return None
+    offset = int(column["offset"])
+    for local_z, block_id in enumerate(column["blocks"]):
+        if block_id and offset + local_z == z:
+            return block_defs[int(block_id)]
+    return None
+
+
+def _high_step(slope):
+    if 1 <= slope <= 8:
+        step = slope - 1
+        count = 2
+    elif 9 <= slope <= 40:
+        step = slope - 9
+        count = 8
+    elif 41 <= slope <= 44:
+        step = slope - 41
+        count = 1
+    else:
+        return None
+    if step % count != count - 1:
+        return None
+    return ((0, 1), (0, -1), (-1, 0), (1, 0))[step // count]
+
+
+def _is_pop_stair(block):
+    slope = int(block["slope_type"])
+    lid_tile = int(block["lid"].get("tile", 0) or 0)
+    ground_type = int(block["ground_type"])
+    return 1 <= slope <= 44 and (ground_type == 3 or lid_tile == 65 or slope >= 41)
+
+
+def _flat_pavement(block):
+    if block is None or int(block["slope_type"]) != 0 or int(block["ground_type"]) != 2:
+        return False
+    lid_tile = int(block["lid"].get("tile", 0) or 0)
+    return 0 < lid_tile < 992
+
+
+def stair_landing_decks(data):
+    """Elevated pavement a real stair steps onto, plus the deck it belongs to.
+
+    Station platforms were the first case. The same gap exists wherever a
+    stair arrives on ordinary pavement: the slope is stereo and the floor
+    stays a flat texture, so the landing has no floor. Roads are not included.
+    """
+    block_defs = data["block_defs"]
+    columns = {(int(column["x"]), int(column["y"])): column for column in data["columns"]}
+    deck = set()
+    for (x, y), column in columns.items():
+        offset = int(column["offset"])
+        for local_z, block_id in enumerate(column["blocks"]):
+            if not block_id:
+                continue
+            block = block_defs[int(block_id)]
+            z_level = offset + local_z
+            if z_level < 2 or not _is_pop_stair(block):
+                continue
+            step = _high_step(int(block["slope_type"]))
+            if step is None:
+                continue
+            start = (x + step[0], y + step[1], z_level)
+            if start in deck or not _flat_pavement(_block_at(columns, block_defs, *start)):
+                continue
+            pending = [start]
+            deck.add(start)
+            while pending:
+                cx, cy, cz = pending.pop()
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nxt = (cx + dx, cy + dy, cz)
+                    if nxt in deck or not _flat_pavement(_block_at(columns, block_defs, *nxt)):
+                        continue
+                    deck.add(nxt)
+                    pending.append(nxt)
+    return deck
+
+
+stair_deck = stair_landing_decks(map_data)
+if (114, 118, 2) not in stair_deck or (115, 119, 2) not in stair_deck:
+    raise SystemExit("Spawn landing deck was not found")
+if len(stair_deck) < 200:
+    raise SystemExit(f"Stair landing deck is unexpectedly small: {len(stair_deck)}")
+deck_literal = "_STAIR_DECK = {\n" + ",\n".join(
+    f"    ({x}, {y}, {z})" for x, y, z in sorted(stair_deck)
+) + ",\n}\n\n"
 
 helper_anchor = "for cy in range(4):"
 helper = '''_POPOUT_NEIGHBOR = {"left": (-1, 0), "right": (1, 0), "bottom": (0, 1), "top": (0, -1)}
@@ -31,7 +123,7 @@ if helper_anchor not in source:
     raise SystemExit("Could not find chunk loop to insert popout neighbor helper")
 if source.count(helper_anchor) != 1:
     raise SystemExit("Chunk loop anchor is not unique")
-source = source.replace(helper_anchor, helper, 1)
+source = source.replace(helper_anchor, deck_literal + helper, 1)
 
 roof_old = "          exposed_roof=(j==top_j and z>=2 and int(bd['ground_type'])==3 and 0<lid_tile<992)"
 roof_new = """          roof_j=next((rj for rj in range(len(c['blocks'])-1,-1,-1) if c['blocks'][rj] and int(B[c['blocks'][rj]]['ground_type'])==3 and 0<int(B[c['blocks'][rj]]['lid'].get('tile',0) or 0)<992), None)
@@ -60,12 +152,11 @@ for line in source.splitlines():
         out.append(line)
         expression = stripped[len("vis.append(") : -1]
 
-        # Station platforms (pavement lids 346/350) and real stair slopes go
-        # back on the stereo layer. Gentle road ramps stay on the flat board,
-        # which is what stopped the streets floating in 18.20.
+        # A stair's landing deck joins the station platforms on the stereo
+        # layer. Gentle road ramps and ordinary streets stay on the flat board.
         out.append(indent + f"_pop_lid = (name == 'lid' and exposed_roof)")
         out.append(indent + f"_pop_stair = (1 <= slope <= 44) and (int(bd['ground_type']) == 3 or lid_tile == 65 or slope >= 41)")
-        out.append(indent + f"_pop_platform = (int(bd['ground_type']) == 2 and z >= 2 and lid_tile in (346, 350))")
+        out.append(indent + f"_pop_platform = ((gx, gy, z) in _STAIR_DECK) or (int(bd['ground_type']) == 2 and z >= 2 and lid_tile in (346, 350))")
         out.append(indent + f"_pop_road = int(bd['ground_type']) in (1, 2) and (not _pop_stair) and (not _pop_platform)")
         out.append(indent + f"_pop_ramp = False")
         out.append(
@@ -118,8 +209,8 @@ if "_popout_field_neighbor" not in text:
     raise SystemExit("Roof-shell neighbor helper missing after patch")
 if "roof_j=next(" not in text:
     raise SystemExit("Highest-field roof lid selection missing after patch")
-if "_pop_hidden_lid" not in text:
-    raise SystemExit("Interior-floor lid filter missing after patch")
+if "_STAIR_DECK" not in text:
+    raise SystemExit("Stair landing deck missing after patch")
 
 builder.write_text(text, encoding="utf-8")
 subprocess.run([sys.executable, str(builder)], cwd=root, check=True)
@@ -132,7 +223,6 @@ if len(flat) != 16:
     raise SystemExit(f"Expected 16 flat meshes, found {len(flat)}")
 
 map_path = root / "assets" / "gta2" / "downtown" / "downtown_exact_map.json"
-map_data = json.loads(map_path.read_text(encoding="utf-8"))
 station_floor = bytearray(256 * 256 * 8)
 block_defs = map_data["block_defs"]
 marked = 0
@@ -150,7 +240,9 @@ for column in map_data["columns"]:
         lid_tile = int(block["lid"].get("tile", 0) or 0)
         ground_type = int(block["ground_type"])
         is_stair = 1 <= slope <= 44 and lid_tile == 65 and ground_type != 3
-        is_platform = ground_type == 2 and z_level >= 2 and lid_tile in (346, 350)
+        is_platform = (int(column["x"]), int(column["y"]), z_level) in stair_deck or (
+            ground_type == 2 and z_level >= 2 and lid_tile in (346, 350)
+        )
         if is_stair or is_platform:
             station_floor[cell + z_level] = 1
             marked += 1
