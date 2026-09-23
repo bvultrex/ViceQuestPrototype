@@ -56,12 +56,25 @@ jobs:
                       a=max(0,i-4); b=min(len(lines),i+10)
                       print(f"\n... context {i+1} ...\n"+"\n".join(lines[a:b]))
           PY
+      - name: Capture exact source detail
+        shell: bash
+        run: |
+          {
+            echo "===== MAIN HEAD ====="
+            sed -n '1,460p' "$PROJECT_DIR/scripts/main.gd"
+            echo "===== VEHICLE FULL ====="
+            cat "$PROJECT_DIR/scripts/vehicle.gd"
+            echo "===== AUDIO FULL ====="
+            cat "$PROJECT_DIR/scripts/audio_manager.gd"
+            echo "===== COP FULL ====="
+            cat "$PROJECT_DIR/scripts/cop.gd"
+          } > SOURCE_DETAIL.txt
       - name: Commit inspection output
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "vicequest-ci"
           git config user.email "actions@users.noreply.github.com"
-          git add SOURCE_INSPECTION.txt
-          git commit -m "CI: capture source inspection" || exit 0
+          git add SOURCE_INSPECTION.txt SOURCE_DETAIL.txt
+          git commit -m "CI: capture detailed source inspection" || exit 0
           git push
