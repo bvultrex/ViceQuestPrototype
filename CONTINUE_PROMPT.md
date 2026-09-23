@@ -134,3 +134,46 @@ Do not continue Quest work from current `main` v0.6.18.11/12/13 unless explicitl
 - Enter SWAT van: verify sprite now faces driving direction.
 - Enter several cars and note the displayed vehicle name for any model still visually reversed.
 
+
+## Current candidate: v0.6.18.31 Timecycle / Lamps (2026-09-23)
+
+- Artifact: `ViceQuest-v0.6.18.31-Timecycle-Lamps`
+- Build head: `b0e14c26e650abe04da2ee15085471bc62114b65`
+- GitHub Actions run: `35906690167`
+- Result: successful full patch chain through 18.31, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:94bcabbfd5038c145d0c5ec69d6f4b6500691cc1dd11ccb3e0da2b65ec22789d`
+
+### v0.6.18.30 / 18.31 changes
+
+1. **Traffic audio range**
+   - Hardware 18.29 finally confirmed vehicle engine audio works.
+   - Nearby traffic engine radius reduced from 58 to 36 world units.
+   - Unique physical traffic WAV architecture from 18.29 is retained.
+
+2. **Police blue beacon**
+   - Replaces the too-subtle 24x7 roof strip with a 48x48 soft blue roof corona plus bright core.
+   - No depth test, higher render priority, stronger alternating blue modulation.
+   - Existing reliable police FX sync, siren audio and Quest elevated-vehicle copying remain.
+
+3. **GTA2-inspired timecycle**
+   - Full cycle currently 720 real seconds (12 minutes), starting around 17:30 for hardware testing.
+   - Dusk blends from 18:00 to 20:00, full night 20:00-05:00, dawn 05:00-07:00.
+   - Quest base game viewport gets a dark blue night tint without darkening the UI viewport.
+   - Quest pop-out buildings, elevated peds and elevated vehicles receive matching night tint.
+
+4. **Map lights**
+   - 18.30 includes a parser for the official GTA2 GMP `LGHT` chunk (ARGB, XYZ, radius, intensity, shape/on/off).
+   - The currently reconstructed source pack contains no preserved GMP/LGHT source: CI confirmed 0 original lights available.
+   - 18.31 therefore generated **420** warm Downtown curb lights from the exact `downtown_exact_map.json` road/pavement topology.
+   - Runtime renders only the nearest **36** lights inside **44 world units**, refreshed at a low cadence for Quest performance.
+   - If a future source pack contains original LGHT data, 18.31 leaves those original lights untouched and the fallback is not generated.
+
+### Hardware test priority for 18.31
+
+- Confirm traffic engines now fade out sooner and do not sound like the whole city is loaded at once.
+- Trigger police pursuit and confirm the larger blue roof beacon is finally obvious while siren remains audible.
+- Watch the board through dusk into night; full cycle is 12 minutes and starts around 17:30.
+- At night confirm warm curb/street light pools appear around nearby roads and move through the 36-light pool as the player travels.
+- Check Quest performance at night, especially while driving through dense traffic and a police pursuit.
+- Verify the UI stays normally bright while the world darkens.
+
