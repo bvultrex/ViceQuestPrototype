@@ -51,6 +51,8 @@ var popout_material: ShaderMaterial
 var popout_chunks: Dictionary = {}
 var popout_pawns: Dictionary = {}
 var popout_vehicles: Dictionary = {}
+var popout_throws: Dictionary = {}
+var popout_one_shots: Array = []
 var popout_enabled: bool = false
 
 func configure(start_position: Vector3, height: float, fov: float, speed: float) -> void:
@@ -596,6 +598,173 @@ func _clear_elevated_vehicles() -> void:
     for raw_id: Variant in popout_vehicles.keys():
         _free_elevated_vehicle(raw_id)
     popout_vehicles.clear()
+
+func sync_elevated_throws(projectiles: Dictionary, fires: Dictionary, flames: Dictionary) -> void:
+    if not xr_active or popout_root == null or not popout_enabled:
+        _clear_elevated_throws()
+        _clear_one_shots()
+        return
+    var desired: Dictionary = {}
+    _sync_throw_group(projectiles, "proj", desired)
+    _sync_throw_group(fires, "fire", desired)
+    _sync_throw_group(flames, "flame", desired)
+    var stale: Array = []
+    for raw_key: Variant in popout_throws.keys():
+        if not desired.has(raw_key):
+            stale.append(raw_key)
+    for raw_key: Variant in stale:
+        _free_throw(raw_key)
+    _sync_one_shots()
+
+func track_elevated_fx(source: Node3D, travel_y: float = -1.0) -> void:
+    if not xr_active or popout_root == null or not popout_enabled or source == null:
+        return
+    var reach: float = source.global_position.y
+    if travel_y > reach:
+        reach = travel_y
+    if reach < ELEVATED_PAWN_MIN_Y:
+        return
+    var holder: Node3D = Node3D.new()
+    holder.name = "ElevatedFx"
+    popout_root.add_child(holder)
+    if source is MeshInstance3D:
+        var mesh_clone: MeshInstance3D = MeshInstance3D.new()
+        mesh_clone.name = "Streak"
+        mesh_clone.mesh = (source as MeshInstance3D).mesh
+        mesh_clone.layers = QUEST_DISPLAY_LAYER
+        mesh_clone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        holder.add_child(mesh_clone)
+    else:
+        holder.add_child(_make_flat_sprite("Fx"))
+    popout_one_shots.append({"source": source, "holder": holder})
+
+func _sync_throw_group(nodes: Dictionary, prefix: String, desired: Dictionary) -> void:
+    for raw_id: Variant in nodes.keys():
+        var node: Node = nodes[raw_id] as Node
+        var key: String = "%s:%s" % [prefix, str(raw_id)]
+        if node == null or not is_instance_valid(node):
+            continue
+        if node.global_position.y < ELEVATED_PAWN_MIN_Y:
+            _reveal_sprites(node)
+            continue
+        desired[key] = true
+        var holder: Node3D = popout_throws.get(key) as Node3D
+        if holder == null or not is_instance_valid(holder):
+            holder = Node3D.new()
+            holder.name = "ElevatedThrow_%s" % key.replace(":", "_")
+            popout_root.add_child(holder)
+            popout_throws[key] = holder
+        _mirror_sprites(holder, node)
+
+func _mirror_sprites(holder: Node3D, source: Node) -> void:
+    var sprites: Array[SpriteBase3D] = []
+    _gather_sprites(source, sprites)
+    while holder.get_child_count() < sprites.size():
+        holder.add_child(_make_flat_sprite("Throw%d" % holder.get_child_count()))
+    for index in range(holder.get_child_count()):
+        var clone: Sprite3D = holder.get_child(index) as Sprite3D
+        if clone == null:
+            continue
+        if index >= sprites.size():
+            clone.visible = false
+            continue
+        _copy_throw_sprite(clone, sprites[index])
+        sprites[index].visible = false
+
+func _gather_sprites(node: Node, into: Array[SpriteBase3D]) -> void:
+    if node is SpriteBase3D:
+        into.append(node as SpriteBase3D)
+    for child: Node in node.get_children():
+        _gather_sprites(child, into)
+
+func _copy_throw_sprite(clone: Sprite3D, src: SpriteBase3D) -> void:
+    var tex: Texture2D = null
+    if src is AnimatedSprite3D:
+        var anim_sprite: AnimatedSprite3D = src as AnimatedSprite3D
+        var frames: SpriteFrames = anim_sprite.sprite_frames
+        if frames != null and frames.has_animation(anim_sprite.animation):
+            var frame_count: int = frames.get_frame_count(anim_sprite.animation)
+            if frame_count > 0:
+                tex = frames.get_frame_texture(anim_sprite.animation, clampi(anim_sprite.frame, 0, frame_count - 1))
+    elif src is Sprite3D:
+        tex = (src as Sprite3D).texture
+    if tex == null:
+        clone.visible = false
+        return
+    clone.texture = tex
+    clone.pixel_size = src.pixel_size
+    clone.modulate = src.modulate
+    clone.flip_h = src.flip_h
+    clone.flip_v = src.flip_v
+    var pos: Vector3 = src.global_position
+    pos.y += ELEVATED_PAWN_Y_BIAS
+    var basis: Basis = src.global_transform.basis
+    if src.billboard != BaseMaterial3D.BILLBOARD_DISABLED:
+        basis = Basis(Vector3.UP, src.global_rotation.y) * Basis(Vector3.RIGHT, deg_to_rad(-90.0))
+    clone.transform = Transform3D(basis, pos)
+    if src.billboard != BaseMaterial3D.BILLBOARD_DISABLED:
+        clone.scale = src.scale
+    clone.set_meta("source_sprite", src)
+    clone.visible = true
+
+func _reveal_sprites(node: Node) -> void:
+    if node is SpriteBase3D:
+        (node as SpriteBase3D).visible = true
+    for child: Node in node.get_children():
+        _reveal_sprites(child)
+
+func _free_throw(raw_key: Variant) -> void:
+    var holder: Node = popout_throws[raw_key]
+    if is_instance_valid(holder):
+        for child: Node in holder.get_children():
+            if child.has_meta("source_sprite"):
+                var src: Variant = child.get_meta("source_sprite")
+                if src is SpriteBase3D and is_instance_valid(src):
+                    (src as SpriteBase3D).visible = true
+        holder.queue_free()
+    popout_throws.erase(raw_key)
+
+func _clear_elevated_throws() -> void:
+    for raw_key: Variant in popout_throws.keys():
+        _free_throw(raw_key)
+    popout_throws.clear()
+
+func _sync_one_shots() -> void:
+    var keep: Array = []
+    for entry: Variant in popout_one_shots:
+        var row: Dictionary = entry as Dictionary
+        var source: Node = row.get("source") as Node
+        var holder: Node3D = row.get("holder") as Node3D
+        if source == null or holder == null or not is_instance_valid(source) or not is_instance_valid(holder):
+            if holder != null and is_instance_valid(holder):
+                holder.queue_free()
+            continue
+        if source.global_position.y < ELEVATED_PAWN_MIN_Y:
+            holder.visible = false
+            keep.append(row)
+            continue
+        holder.visible = true
+        if source is MeshInstance3D:
+            var mesh_clone: MeshInstance3D = holder.get_node_or_null("Streak") as MeshInstance3D
+            if mesh_clone != null:
+                var pos: Vector3 = source.global_position
+                pos.y += ELEVATED_PAWN_Y_BIAS
+                mesh_clone.transform = Transform3D(source.global_transform.basis, pos)
+        elif source is SpriteBase3D:
+            var fx: Sprite3D = holder.get_node_or_null("Fx") as Sprite3D
+            if fx != null:
+                _copy_throw_sprite(fx, source as SpriteBase3D)
+                (source as SpriteBase3D).visible = false
+        keep.append(row)
+    popout_one_shots = keep
+
+func _clear_one_shots() -> void:
+    for entry: Variant in popout_one_shots:
+        var row: Dictionary = entry as Dictionary
+        var holder: Node = row.get("holder") as Node
+        if holder != null and is_instance_valid(holder):
+            holder.queue_free()
+    popout_one_shots.clear()
 
 func ui_parent() -> Node:
     if xr_active and ui_viewport != null:

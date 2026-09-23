@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.18-HeardProps"
+  EXPORT_NAME: "ViceQuest-v0.6.18.19-ElevatedThrows"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -290,6 +290,17 @@ jobs:
           test -s "$PROJECT_DIR/assets/audio/gta2/radio/radio_spark.wav"
           ! grep -q 'AudioStreamPlayer3D' "$PROJECT_DIR/scripts/audio_manager.gd"
 
+      - name: Apply elevated throw Quest overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_elevated_throws.py" "$PROJECT_DIR"
+          grep -q 'func sync_elevated_throws' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'func track_elevated_fx' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'presentation_rig.sync_elevated_throws' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'presentation_rig.track_elevated_fx(projectile, end.y)' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func burn_anchors()' "$PROJECT_DIR/scripts/combat_fx.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -320,7 +331,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.18-HeardProps
+          name: ViceQuest-v0.6.18.19-ElevatedThrows
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
