@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.32-Visible-Lights"
+  EXPORT_NAME: "ViceQuest-v0.6.18.33-Light-Audio-Cleanup"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -451,6 +451,18 @@ jobs:
           grep -q 'TailLeft' "$PROJECT_DIR/scripts/main.gd"
           grep -q 'Beam' "$PROJECT_DIR/scripts/main.gd"
 
+      - name: Apply v0.6.18.33 light audio cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061833_light_audio_cleanup.py" "$PROJECT_DIR"
+          grep -q 'loop_restart_offset' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'pos_a.distance_to(pos_b) < 4.8' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'braking_reverse' "$PROJECT_DIR/scripts/combat_fx.gd"
+          grep -q 'func _hide_vehicle_light_holder' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'world_radius \* 2.05' "$PROJECT_DIR/scripts/main.gd"
+          grep -q '_make_light_sprite("Beam", gta2_headbeam_texture, 0.070, 20)' "$PROJECT_DIR/scripts/main.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -481,7 +493,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.32-Visible-Lights
+          name: ViceQuest-v0.6.18.33-Light-Audio-Cleanup
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
