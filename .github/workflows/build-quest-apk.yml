@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.28-Pursuit-Crash-Audio"
+  EXPORT_NAME: "ViceQuest-v0.6.18.29-Vehicle-Presentation"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -397,6 +397,20 @@ jobs:
           grep -q 'func _sync_elevated_police_light' "$PROJECT_DIR/scripts/presentation_rig.gd"
           ! grep -R -q 'AudioStreamPlayer3D' "$PROJECT_DIR/scripts"
 
+      - name: Apply v0.6.18.29 vehicle presentation fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061829_vehicle_presentation.py" "$PROJECT_DIR"
+          grep -q 'func _traffic_voice_stream' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'func _siren_voice_stream' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'func _sync_cop_exit' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'gta2_vehicle_name_label' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'relative_speed \* 0.42' "$PROJECT_DIR/scripts/vehicle.gd"
+          test -s "$PROJECT_DIR/assets/audio/gta2/sfx/engine_standard_traffic_0.wav"
+          test -s "$PROJECT_DIR/assets/audio/gta2/sfx/horn_siren_0.wav"
+          ! grep -R -q 'AudioStreamPlayer3D' "$PROJECT_DIR/scripts"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -427,7 +441,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.28-Pursuit-Crash-Audio
+          name: ViceQuest-v0.6.18.29-Vehicle-Presentation
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
