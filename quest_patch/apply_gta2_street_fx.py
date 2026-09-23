@@ -307,16 +307,13 @@ func play_skid_mark(world_position: Vector3, forward: Vector3, speed: float = 0.
         _spawn_gta_decal(streak, world_position + side * offset, yaw, 0.042, 6.0, 0.78, "skid")
 
 func play_crash_sparks(world_position: Vector3) -> void:
-    var count: int = 3 if low_power else 5
+    var count: int = 2 if low_power else 3
     for index in range(count):
         var tex: Texture2D = _gta_tex("spark_%d" % (index % 4))
         if tex == null:
             continue
-        var jitter: Vector3 = Vector3(randf_range(-0.42, 0.42), 0.05, randf_range(-0.42, 0.42))
-        _spawn_gta_decal(tex, world_position + jitter, randf_range(0.0, 360.0), randf_range(0.040, 0.062), 0.22, 1.0, "fx")
-    var puff: Texture2D = _gta_tex("puff")
-    if puff != null:
-        _spawn_gta_decal(puff, world_position, randf_range(0.0, 360.0), 0.055, 0.45, 0.65, "fx")
+        var jitter: Vector3 = Vector3(randf_range(-0.16, 0.16), 0.03, randf_range(-0.16, 0.16))
+        _spawn_gta_decal(tex, world_position + jitter, randf_range(0.0, 360.0), randf_range(0.016, 0.026), 0.11, 0.72, "fx")
 
 func play_gun_fx(start: Vector3, end: Vector3) -> void:
     var flat: Vector3 = end - start
@@ -524,15 +521,17 @@ main = replace(
     """func _spawn_elvis_line() -> void:
     # Remap 12 is the white jumpsuit. They share one block and start a step
     # apart so the line reads as the downtown conga, not six lone pedestrians.
+    # The camera sits over the downtown spawn. The old loop was a block
+    # north of that street, outside the board, so the line never appeared.
     var route: Array[Vector3] = [
-        Vector3(316.0, 0.12, 330.5),
-        Vector3(352.0, 0.12, 330.5),
-        Vector3(352.0, 0.12, 348.0),
-        Vector3(316.0, 0.12, 348.0),
+        Vector3(306.0, 0.12, 325.6),
+        Vector3(340.0, 0.12, 325.6),
+        Vector3(340.0, 0.12, 321.2),
+        Vector3(306.0, 0.12, 321.2),
     ]
     for index in range(6):
         var elvis_id: int = 9001 + index
-        var start: Vector3 = route[0] + Vector3(float(index) * 2.2, 0.0, 0.0)
+        var start: Vector3 = route[0] + Vector3(6.0 + float(index) * 2.5, 0.0, 0.0)
         _create_civilian(elvis_id, start, route, Color(0.95, 0.92, 0.98), false, false)
         if civilians.has(elvis_id):
             civilians[elvis_id].set_elvis()
