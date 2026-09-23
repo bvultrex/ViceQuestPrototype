@@ -46,12 +46,59 @@ for rel in ("scripts/cop.gd", "scripts/civilian.gd"):
 main = read("scripts/main.gd")
 main = replace(
     main,
+    "var downtown_ground_layers: PackedByteArray = PackedByteArray()\n",
+    "var downtown_ground_layers: PackedByteArray = PackedByteArray()\n"
+    "var downtown_station_floor: PackedByteArray = PackedByteArray()\n",
+    "station floor buffer",
+)
+main = replace(
+    main,
+    "        downtown_ground_layers = ground_file.get_buffer(ground_file.get_length())\n",
+    "        downtown_ground_layers = ground_file.get_buffer(ground_file.get_length())\n"
+    "    var station_file: FileAccess = FileAccess.open(\"res://assets/gta2/downtown/downtown_station_floor.bin\", FileAccess.READ)\n"
+    "    if station_file != null:\n"
+    "        downtown_station_floor = station_file.get_buffer(station_file.get_length())\n",
+    "station floor load",
+)
+main = replace(
+    main,
     "    return Vector2i(best_slope, best_ground)\n",
     "    return Vector2i(best_slope, best_ground)\n"
     "\n"
+    "func _on_station_floor(world_position: Vector3, current_surface_y: float) -> bool:\n"
+    "    if downtown_station_floor.size() < 256 * 256 * 8:\n"
+    "        return false\n"
+    "    if downtown_surface_mask.size() < 256 * 256 or downtown_slope_layers.size() < 256 * 256 * 8:\n"
+    "        return false\n"
+    "    var tile_size: float = DOWNTOWN_DATA.TILE_SIZE\n"
+    "    var height_unit: float = DOWNTOWN_DATA.HEIGHT_UNIT\n"
+    "    var cell_x: int = clampi(floori(world_position.x / tile_size), 0, 255)\n"
+    "    var cell_y: int = clampi(floori(world_position.z / tile_size), 0, 255)\n"
+    "    var cell_index: int = cell_y * 256 + cell_x\n"
+    "    var mask: int = int(downtown_surface_mask[cell_index])\n"
+    "    var local_x: float = fposmod(world_position.x, tile_size) / tile_size\n"
+    "    var source_local_y: float = 1.0 - fposmod(world_position.z, tile_size) / tile_size\n"
+    "    var best_z: int = -1\n"
+    "    var best_distance: float = INF\n"
+    "    for z_level in range(8):\n"
+    "        if (mask & (1 << z_level)) == 0:\n"
+    "            continue\n"
+    "        var slope_type: int = int(downtown_slope_layers[cell_index * 8 + z_level])\n"
+    "        var local_height: float = _slope_local_height(slope_type, local_x, source_local_y)\n"
+    "        var surface_y: float = (float(z_level) + local_height - 1.0) * height_unit\n"
+    "        var distance: float = absf(surface_y - current_surface_y)\n"
+    "        if distance < best_distance:\n"
+    "            best_distance = distance\n"
+    "            best_z = z_level\n"
+    "    if best_z < 0:\n"
+    "        return false\n"
+    "    return downtown_station_floor[cell_index * 8 + best_z] != 0\n"
+    "\n"
     "func surface_is_building_roof(world_position: Vector3) -> bool:\n"
     "    var info: Vector2i = _surface_block_info(world_position, world_position.y - 0.12)\n"
-    "    return info.y == 3\n",
+    "    if info.y == 3:\n"
+    "        return true\n"
+    "    return _on_station_floor(world_position, world_position.y - 0.12)\n",
     "roof query",
 )
 main = replace(
@@ -71,6 +118,7 @@ write("scripts/main.gd", main)
 
 for rel, needle in (
     ("scripts/main.gd", "func surface_is_building_roof"),
+    ("scripts/main.gd", "func _on_station_floor"),
     ("scripts/main.gd", "presentation_rig.sync_elevated_pawns(elevated_peds)"),
     ("scripts/cop.gd", "func get_ped_sprite()"),
     ("scripts/civilian.gd", "func get_ped_sprite()"),

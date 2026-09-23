@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import subprocess
 import sys
 
@@ -59,36 +60,29 @@ for line in source.splitlines():
         out.append(line)
         expression = stripped[len("vis.append(") : -1]
 
-        # v0.6.18.12 roof shell:
-        # - ramps/stairs (slope 1..44) stay on the flat board except the actual
-        #   exposed building-roof lid, which must pop out;
-        # - the roof lid is the highest field (gt3) lid in the column, even if
-        #   air blocks sit above it;
-        # - intermediate field lids stay out of popout (those are interior floors);
-        # - field walls that face another field block at the same Z are interior
-        #   and must not stick through the roof.
+        # Station platforms (pavement lids 346/350) and real stair slopes go
+        # back on the stereo layer. Gentle road ramps stay on the flat board,
+        # which is what stopped the streets floating in 18.20.
         out.append(indent + f"_pop_lid = (name == 'lid' and exposed_roof)")
-        out.append(indent + f"_pop_ramp = (1 <= slope <= 44) and not _pop_lid")
-        out.append(indent + f"_pop_road = int(bd['ground_type']) in (1, 2)")
+        out.append(indent + f"_pop_stair = (1 <= slope <= 44) and (int(bd['ground_type']) == 3 or lid_tile == 65 or slope >= 41)")
+        out.append(indent + f"_pop_platform = (int(bd['ground_type']) == 2 and z >= 2 and lid_tile in (346, 350))")
+        out.append(indent + f"_pop_road = int(bd['ground_type']) in (1, 2) and (not _pop_stair) and (not _pop_platform)")
+        out.append(indent + f"_pop_ramp = False")
         out.append(
             indent
-            + f"_pop_hidden_lid = (name == 'lid' and int(bd['ground_type']) == 3 and not exposed_roof and z >= 2)"
+            + f"_pop_hidden_lid = (name == 'lid' and int(bd['ground_type']) == 3 and not exposed_roof and z >= 2 and not _pop_stair)"
         )
         out.append(
             indent
-            + f"_pop_interior = (name in ('left', 'right', 'top', 'bottom') and int(bd['ground_type']) == 3 and _popout_field_neighbor(gx, gy, z, name))"
+            + f"_pop_interior = (name in ('left', 'right', 'top', 'bottom') and int(bd['ground_type']) == 3 and _popout_field_neighbor(gx, gy, z, name) and not _pop_stair)"
         )
         out.append(
             indent
             + f"if (not _pop_road) and (not _pop_ramp) and (not _pop_hidden_lid) and (not _pop_interior): pop_vis.append({expression})"
         )
-
-        # Roads and pavement, including elevated decks and their ramps, stay on
-        # the flat board. A second stereo copy is what made those streets float
-        # over the road texture and hide anyone who was not cloned.
         out.append(
             indent
-            + f"if (int(bd['ground_type']) in (1, 2)) or ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (0,1,2))): flat_vis.append({expression})"
+            + f"if ((int(bd['ground_type']) in (1, 2)) or ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (0,1,2)))) and (not _pop_stair) and (not _pop_platform): flat_vis.append({expression})"
         )
         vis_append_count += 1
         continue
@@ -136,5 +130,33 @@ if len(popout) != 16:
     raise SystemExit(f"Expected 16 popout meshes, found {len(popout)}")
 if len(flat) != 16:
     raise SystemExit(f"Expected 16 flat meshes, found {len(flat)}")
+
+map_path = root / "assets" / "gta2" / "downtown" / "downtown_exact_map.json"
+map_data = json.loads(map_path.read_text(encoding="utf-8"))
+station_floor = bytearray(256 * 256 * 8)
+block_defs = map_data["block_defs"]
+marked = 0
+for column in map_data["columns"]:
+    cell = (int(column["y"]) * 256 + int(column["x"])) * 8
+    offset = int(column["offset"])
+    for local_z, block_id in enumerate(column["blocks"]):
+        if not block_id:
+            continue
+        z_level = offset + local_z
+        if not 0 <= z_level < 8:
+            continue
+        block = block_defs[int(block_id)]
+        slope = int(block["slope_type"])
+        lid_tile = int(block["lid"].get("tile", 0) or 0)
+        ground_type = int(block["ground_type"])
+        is_stair = 1 <= slope <= 44 and lid_tile == 65 and ground_type != 3
+        is_platform = ground_type == 2 and z_level >= 2 and lid_tile in (346, 350)
+        if is_stair or is_platform:
+            station_floor[cell + z_level] = 1
+            marked += 1
+mask_path = map_path.with_name("downtown_station_floor.bin")
+mask_path.write_bytes(station_floor)
+if marked < 100:
+    raise SystemExit(f"Station floor mask marked only {marked} layers")
 
 print("Built 16 Quest roof-shell pop-out meshes and 16 flat ground meshes.")
