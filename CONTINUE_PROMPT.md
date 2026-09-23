@@ -177,3 +177,40 @@ Do not continue Quest work from current `main` v0.6.18.11/12/13 unless explicitl
 - Check Quest performance at night, especially while driving through dense traffic and a police pursuit.
 - Verify the UI stays normally bright while the world darkens.
 
+
+## Current candidate: v0.6.18.32 Visible Lights (2026-09-23)
+
+- Artifact: `ViceQuest-v0.6.18.32-Visible-Lights`
+- Build head: `fddbf87a191e13eaab53515dc61c16e86cb54816`
+- GitHub Actions run: `35907995040`
+- Result: successful full patch chain through 18.32, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:ae948cdd4cdc68496e8e67f226631ce80be5ee37e0a86d31d6004a1ad7bc6ba4`
+
+### v0.6.18.32 changes
+
+1. **Street-light coordinate fix**
+   - 18.31 hardware showed day/night tint and police beacon but no curb/street glows.
+   - Root cause candidate: 18.30 converted map-block lights with a hard-coded 2.8 world-units-per-block value, while the actual runtime already uses `DOWNTOWN_DATA.TILE_SIZE`.
+   - 18.32 converts light X/Z using `DOWNTOWN_DATA.TILE_SIZE` directly.
+   - Each selected light is snapped to the actual nearby surface with `sample_surface_height()`.
+   - Map-light sprites explicitly use visual layer 1, no depth test and a higher render priority.
+   - Warm corona texture is stronger/larger than 18.31.
+
+2. **Vehicle headlights / tail lights**
+   - Adds a bounded nearest-vehicle light pool: maximum 18 vehicles inside 31 world units.
+   - Uses shared textures, not one texture allocation per vehicle.
+   - Each active vehicle receives two warm headlight glows, a short forward road-light beam and two red tail-light glows at night.
+   - Light placement follows the vehicle's actual `get_forward_vector()` and `get_side_vector()`, so it is independent of sprite orientation.
+   - Vans/trucks/SWAT use a slightly larger longitudinal/width offset.
+   - Tank keeps front/tail glows but no headlight road beam.
+   - All vehicle-light sprites are unshaded/no-depth-test and render on gameplay layer 1.
+
+### Hardware test priority for 18.32
+
+- Let the cycle reach night and confirm warm curb/street coronas are now visible beside roads.
+- Enter/approach ordinary traffic at night and confirm twin warm headlights plus red tail lights.
+- Watch moving traffic to verify the forward light beam follows driving direction instead of sprite orientation.
+- Verify the already-working police blue beacon and siren still work.
+- Check Quest performance in dense night traffic; vehicle lights are capped at 18 nearby vehicles and map lights at 36 nearby lights.
+- If a light appears on the wrong side of a vehicle, note the displayed vehicle name from the 18.29 HUD popup.
+
