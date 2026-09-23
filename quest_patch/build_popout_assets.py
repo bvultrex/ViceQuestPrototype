@@ -69,6 +69,7 @@ for line in source.splitlines():
         #   and must not stick through the roof.
         out.append(indent + f"_pop_lid = (name == 'lid' and exposed_roof)")
         out.append(indent + f"_pop_ramp = (1 <= slope <= 44) and not _pop_lid")
+        out.append(indent + f"_pop_road = int(bd['ground_type']) in (1, 2)")
         out.append(
             indent
             + f"_pop_hidden_lid = (name == 'lid' and int(bd['ground_type']) == 3 and not exposed_roof and z >= 2)"
@@ -79,15 +80,15 @@ for line in source.splitlines():
         )
         out.append(
             indent
-            + f"if (not _pop_ramp) and (not _pop_hidden_lid) and (not _pop_interior): pop_vis.append({expression})"
+            + f"if (not _pop_road) and (not _pop_ramp) and (not _pop_hidden_lid) and (not _pop_interior): pop_vis.append({expression})"
         )
 
-        # Flat viewport keeps traversable GTA2 slopes plus ordinary
-        # ground/road/pavement lids. Elevated GroundType-0 lids stay: Downtown
-        # uses them for bridges/platforms. Building roofs remain stereo-only.
+        # Roads and pavement, including elevated decks and their ramps, stay on
+        # the flat board. A second stereo copy is what made those streets float
+        # over the road texture and hide anyone who was not cloned.
         out.append(
             indent
-            + f"if ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (0,1,2))): flat_vis.append({expression})"
+            + f"if (int(bd['ground_type']) in (1, 2)) or ((1 <= slope <= 44) and not (name == 'lid' and exposed_roof)) or (name == 'lid' and (z <= 1 or int(bd['ground_type']) in (0,1,2))): flat_vis.append({expression})"
         )
         vis_append_count += 1
         continue

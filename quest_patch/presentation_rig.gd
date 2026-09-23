@@ -365,6 +365,14 @@ func _update_popout_transform() -> void:
             Vector2(half_width_world, half_height_world) * QUEST_POP_OUT_OVERSCAN
         )
 
+func _on_building_roof(world_position: Vector3) -> bool:
+    if world_position.y < ELEVATED_PAWN_MIN_Y:
+        return false
+    var host: Node = get_parent()
+    if host != null and host.has_method("surface_is_building_roof"):
+        return bool(host.call("surface_is_building_roof", world_position))
+    return true
+
 func sync_elevated_pawns(player_nodes: Dictionary) -> void:
     if not xr_active or popout_root == null or not popout_enabled:
         _clear_elevated_pawns()
@@ -372,7 +380,7 @@ func sync_elevated_pawns(player_nodes: Dictionary) -> void:
 
     var desired: Dictionary = {}
     for raw_id: Variant in player_nodes.keys():
-        var id: int = int(raw_id)
+        var pawn_key: String = str(raw_id)
         var player: Node = player_nodes[raw_id]
         if player == null or not is_instance_valid(player):
             continue
@@ -384,16 +392,16 @@ func sync_elevated_pawns(player_nodes: Dictionary) -> void:
         var src: SpriteBase3D = player.get_ped_sprite()
         if src == null or not is_instance_valid(src):
             continue
-        if float(player.position.y) < ELEVATED_PAWN_MIN_Y:
+        if not _on_building_roof(player.position):
             src.visible = true
             continue
 
-        desired[id] = true
-        var clone: Sprite3D = popout_pawns.get(id) as Sprite3D
+        desired[pawn_key] = true
+        var clone: Sprite3D = popout_pawns.get(pawn_key) as Sprite3D
         if clone == null or not is_instance_valid(clone):
-            clone = _make_elevated_pawn_sprite(id)
+            clone = _make_elevated_pawn_sprite(pawn_key)
             popout_root.add_child(clone)
-            popout_pawns[id] = clone
+            popout_pawns[pawn_key] = clone
         _copy_elevated_pawn(clone, src)
         src.visible = false
 
@@ -402,9 +410,9 @@ func sync_elevated_pawns(player_nodes: Dictionary) -> void:
             continue
         _free_elevated_pawn(raw_id, player_nodes)
 
-func _make_elevated_pawn_sprite(id: int) -> Sprite3D:
+func _make_elevated_pawn_sprite(pawn_key: String) -> Sprite3D:
     var clone: Sprite3D = Sprite3D.new()
-    clone.name = "ElevatedPawn_%d" % id
+    clone.name = "ElevatedPawn_%s" % pawn_key
     clone.layers = QUEST_DISPLAY_LAYER
     clone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     clone.billboard = BaseMaterial3D.BILLBOARD_DISABLED
@@ -488,7 +496,7 @@ func sync_elevated_vehicles(vehicle_nodes: Dictionary) -> void:
         var src: SpriteBase3D = vehicle.get_sprite()
         if src == null or not is_instance_valid(src):
             continue
-        var on_roof: bool = float(vehicle.position.y) >= ELEVATED_PAWN_MIN_Y
+        var on_roof: bool = _on_building_roof(vehicle.position)
         var show_body: bool = bool(vehicle.call("wants_board_sprite"))
         if not on_roof or not show_body:
             src.visible = show_body
@@ -619,10 +627,7 @@ func sync_elevated_throws(projectiles: Dictionary, fires: Dictionary, flames: Di
 func track_elevated_fx(source: Node3D, travel_y: float = -1.0) -> void:
     if not xr_active or popout_root == null or not popout_enabled or source == null:
         return
-    var reach: float = source.global_position.y
-    if travel_y > reach:
-        reach = travel_y
-    if reach < ELEVATED_PAWN_MIN_Y:
+    if not _on_building_roof(source.global_position):
         return
     var holder: Node3D = Node3D.new()
     holder.name = "ElevatedFx"
@@ -644,7 +649,7 @@ func _sync_throw_group(nodes: Dictionary, prefix: String, desired: Dictionary) -
         var key: String = "%s:%s" % [prefix, str(raw_id)]
         if node == null or not is_instance_valid(node):
             continue
-        if node.global_position.y < ELEVATED_PAWN_MIN_Y:
+        if not _on_building_roof(node.global_position):
             _reveal_sprites(node)
             continue
         desired[key] = true
@@ -739,8 +744,10 @@ func _sync_one_shots() -> void:
             if holder != null and is_instance_valid(holder):
                 holder.queue_free()
             continue
-        if source.global_position.y < ELEVATED_PAWN_MIN_Y:
+        if not _on_building_roof(source.global_position):
             holder.visible = false
+            if source is SpriteBase3D:
+                (source as SpriteBase3D).visible = true
             keep.append(row)
             continue
         holder.visible = true

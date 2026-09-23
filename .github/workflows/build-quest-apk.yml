@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.19-ElevatedThrows"
+  EXPORT_NAME: "ViceQuest-v0.6.18.20-FlatStreets"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -301,6 +301,18 @@ jobs:
           grep -q 'presentation_rig.track_elevated_fx(projectile, end.y)' "$PROJECT_DIR/scripts/main.gd"
           grep -q 'func burn_anchors()' "$PROJECT_DIR/scripts/combat_fx.gd"
 
+      - name: Keep elevated roads on the flat board
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_flat_streets.py" "$PROJECT_DIR"
+          grep -q '_pop_road' "$PROJECT_DIR/tools/rebuild_gta2_runtime_assets.py"
+          grep -q 'func surface_is_building_roof' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'sync_elevated_pawns(elevated_peds)' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func _on_building_roof' "$PROJECT_DIR/scripts/presentation_rig.gd"
+          grep -q 'func get_ped_sprite()' "$PROJECT_DIR/scripts/cop.gd"
+          grep -q 'func get_ped_sprite()' "$PROJECT_DIR/scripts/civilian.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -331,7 +343,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.19-ElevatedThrows
+          name: ViceQuest-v0.6.18.20-FlatStreets
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
