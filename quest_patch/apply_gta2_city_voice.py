@@ -148,6 +148,12 @@ audio = replace(
     "\t\t_traffic_wanted.append(false)\n",
     "three traffic players",
 )
+audio = replace(
+    audio,
+    "\t\t\tif pcm.size() >= target_bytes:\n\t\t\t\towned.data = pcm\n",
+    "\t\t\tif pcm.size() >= target_bytes:\n\t\t\t\towned.data = pcm.duplicate()\n",
+    "isolate local loop pcm",
+)
 audio = span_replace(
     audio,
     "func station_name() -> String:\n",
@@ -261,7 +267,7 @@ func update_nearby_traffic(vehicles: Dictionary) -> void:
         var near_vehicle: Node = chosen_nodes[index]
         var variant: String = str(near_vehicle.get("variant_id"))
         var key: String = String(ENGINE_BY_VARIANT.get(variant, "engine_standard"))
-        if key != _traffic_keys[index] or player.stream == null or not player.playing:
+        if key != _traffic_keys[index] or player.stream == null:
             _traffic_keys[index] = key
             player.stream = _owned_loop_instance(key)
             player.set_meta("loop_pos", -1.0)
@@ -290,19 +296,35 @@ func update_nearby_traffic(vehicles: Dictionary) -> void:
 audio += tabify(
     """
 func _owned_loop_instance(sample_key: String) -> AudioStream:
-    var shared: AudioStream = _owned_loop(sample_key)
-    if shared is AudioStreamWAV:
-        var src: AudioStreamWAV = shared as AudioStreamWAV
-        var owned: AudioStreamWAV = AudioStreamWAV.new()
-        owned.format = src.format
-        owned.mix_rate = src.mix_rate
-        owned.stereo = src.stereo
-        owned.loop_mode = AudioStreamWAV.LOOP_FORWARD
-        owned.loop_begin = 0
-        owned.loop_end = 0
-        owned.data = src.data
-        return owned
-    return shared
+    # Rebuild from the imported wav. Never read .data off the cached loop:
+    # that object is already playing on the local engine, and borrowing its
+    # buffer silences every motor on the Quest.
+    var base: AudioStream = _stream(sample_key)
+    if base == null or not (base is AudioStreamWAV):
+        return null
+    var src: AudioStreamWAV = base as AudioStreamWAV
+    var pcm: PackedByteArray = src.data.duplicate()
+    if pcm.is_empty() or src.format != AudioStreamWAV.FORMAT_16_BITS or src.stereo:
+        return null
+    var owned: AudioStreamWAV = AudioStreamWAV.new()
+    owned.format = AudioStreamWAV.FORMAT_16_BITS
+    owned.mix_rate = src.mix_rate
+    owned.stereo = false
+    owned.loop_mode = AudioStreamWAV.LOOP_FORWARD
+    owned.loop_begin = 0
+    owned.loop_end = 0
+    var frame_bytes: int = 2
+    var target_bytes: int = int(src.mix_rate * 2.0) * frame_bytes
+    if pcm.size() >= target_bytes:
+        owned.data = pcm
+    else:
+        var tiled: PackedByteArray = PackedByteArray()
+        while tiled.size() + pcm.size() <= target_bytes:
+            tiled.append_array(pcm)
+        if tiled.is_empty():
+            tiled = pcm
+        owned.data = tiled
+    return owned
 
 func play_ped_voice(kind: String, world_position: Vector3) -> void:
     var panic: bool = kind == "panic"
@@ -486,6 +508,8 @@ for rel, needle in (
     ("scripts/audio_manager.gd", "func play_elvis_spot"),
     ("scripts/audio_manager.gd", 'TrafficEngine_%d'),
     ("scripts/audio_manager.gd", "func _owned_loop_instance"),
+    ("scripts/audio_manager.gd", "src.data.duplicate()"),
+    ("scripts/audio_manager.gd", "owned.data = pcm.duplicate()"),
     ("scripts/audio_manager.gd", "lerpf(-5.0, 0.5, speed_ratio)"),
     ("scripts/main.gd", "func _cue_elvis_line"),
     ("scripts/main.gd", "audio_manager.update_nearby_traffic(vehicles)"),
