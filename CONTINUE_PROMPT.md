@@ -85,3 +85,52 @@ Do not continue Quest work from current `main` v0.6.18.11/12/13 unless explicitl
 - Trigger wanted pursuit: police car should show flashing blue lightbar and original GTA2 siren.
 - Let a police car pin the player's car nearly stationary for about one second: Cop should exit and force the player out.
 
+
+## Current candidate: v0.6.18.29 Vehicle Presentation (2026-09-23)
+
+- Artifact: `ViceQuest-v0.6.18.29-Vehicle-Presentation`
+- Build head: `ff389e038fd470feae3a690260e4884224ffaad2`
+- GitHub Actions run: `35903714926`
+- Result: successful full 18.26 -> 18.27 -> 18.28 -> 18.29 patch chain, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:f7d9bd329053a2453d6b1c7569bc5f0425cc2c0751112db99b9abd41880abcae`
+
+### v0.6.18.29 changes
+
+1. **Traffic engines and sirens**
+   - Keeps the proven 18.26 manual Ear/2D audio architecture and own-car engine path.
+   - At build time creates three physically separate WAV files for every traffic engine family and two separate siren WAVs. Traffic/siren voices load these unique paths instead of runtime PCM/resource duplicates.
+   - Traffic engines now update both on foot and while driving; the player's own car remains excluded from the traffic pool.
+   - Sirens also update both on foot and while driving.
+   - Police FX synchronization is now reliable.
+   - Traffic radius 58 world units; siren radius 82 world units.
+
+2. **Police exit visibility**
+   - Adds reliable `_sync_cop_exit` RPC.
+   - During box-in extraction the player is forced out first, then the Cop is spawned at a separate offset beside/forward of the response vehicle.
+   - Cop is explicitly response-active and visible on every peer.
+
+3. **Police lightbar**
+   - No longer depends on local `stream_active` when response FX is active.
+   - Larger 24x7 blue/white lightbar, no-depth-test, higher render priority.
+   - Existing Quest elevated-vehicle mirroring from 18.28 remains.
+
+4. **Collision**
+   - Mass-weighted target transfer raised from 0.30 to 0.42.
+   - Max transfer raised from 4.25 to 5.60, longitudinal transfer from 0.72 to 0.88 and immediate shove increased.
+   - Anti-reversal / low-restitution behavior remains, so impacts should feel heavier without returning to gummy-ball bounce.
+
+5. **Vehicle orientation / identification**
+   - Confirmed backwards `swat_van.png` is rotated 180 degrees at build time.
+   - Adds GTA-style vehicle-name popup at the right HUD edge for ~2.8 seconds on entry.
+   - Use that displayed name to report any other backwards vehicles so their exact variants can be corrected without guessing.
+
+### Hardware test priority for 18.29
+
+- On foot beside normal traffic: confirm engines are audible.
+- While driving: confirm own engine remains audible and nearby traffic can also be heard.
+- Wanted pursuit while in vehicle: confirm original GTA2 siren is audible and police/SWAT lightbar is visible.
+- Allow police to box the player in: confirm the player is pulled out AND a visible Cop appears beside the response car.
+- Crash into stationary cars at medium/high speed: verify stronger displacement but no pinball reversal.
+- Enter SWAT van: verify sprite now faces driving direction.
+- Enter several cars and note the displayed vehicle name for any model still visually reversed.
+
