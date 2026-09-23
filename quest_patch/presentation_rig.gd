@@ -384,16 +384,18 @@ func sync_elevated_pawns(player_nodes: Dictionary) -> void:
         var player: Node = player_nodes[raw_id]
         if player == null or not is_instance_valid(player):
             continue
-        if int(player.get("vehicle_id")) != 0:
-            _restore_source_sprite(player)
-            continue
         if not player.has_method("get_ped_sprite"):
             continue
         var src: SpriteBase3D = player.get_ped_sprite()
         if src == null or not is_instance_valid(src):
             continue
+        if int(player.get("vehicle_id")) != 0:
+            _restore_source_sprite(player)
+            _free_pawn_clones(pawn_key, src)
+            continue
         if not _on_building_roof(player.position):
             src.visible = true
+            _free_pawn_clones(pawn_key, src)
             continue
 
         desired[pawn_key] = true
@@ -405,10 +407,38 @@ func sync_elevated_pawns(player_nodes: Dictionary) -> void:
         _copy_elevated_pawn(clone, src)
         src.visible = false
 
+    var stale_ids: Array = []
     for raw_id: Variant in popout_pawns.keys():
-        if desired.has(raw_id):
+        if desired.has(str(raw_id)):
             continue
+        stale_ids.append(raw_id)
+    for raw_id: Variant in stale_ids:
         _free_elevated_pawn(raw_id, player_nodes)
+    _drop_orphan_pawn_clones(desired)
+
+func _free_pawn_clones(pawn_key: String, src: SpriteBase3D) -> void:
+    var stale_ids: Array = []
+    for raw_id: Variant in popout_pawns.keys():
+        if str(raw_id) == pawn_key:
+            stale_ids.append(raw_id)
+            continue
+        var node: Node = popout_pawns[raw_id]
+        if is_instance_valid(node) and node.has_meta("source_sprite") and node.get_meta("source_sprite") == src:
+            stale_ids.append(raw_id)
+    for raw_id: Variant in stale_ids:
+        _free_elevated_pawn(raw_id, {})
+
+func _drop_orphan_pawn_clones(desired: Dictionary) -> void:
+    if popout_root == null:
+        return
+    for child: Node in popout_root.get_children():
+        var child_name: String = str(child.name)
+        if not child_name.begins_with("ElevatedPawn_"):
+            continue
+        if desired.has(child_name.trim_prefix("ElevatedPawn_")):
+            continue
+        child.visible = false
+        child.queue_free()
 
 func _make_elevated_pawn_sprite(pawn_key: String) -> Sprite3D:
     var clone: Sprite3D = Sprite3D.new()
@@ -457,17 +487,18 @@ func _restore_source_sprite(player: Node) -> void:
     if src != null and is_instance_valid(src):
         src.visible = true
 
-func _free_elevated_pawn(raw_id: Variant, player_nodes: Dictionary) -> void:
+func _free_elevated_pawn(raw_id: Variant, _player_nodes: Dictionary) -> void:
+    if not popout_pawns.has(raw_id):
+        return
     var old_node: Node = popout_pawns[raw_id]
     if is_instance_valid(old_node):
         if old_node.has_meta("source_sprite"):
             var src: Variant = old_node.get_meta("source_sprite")
             if src is SpriteBase3D and is_instance_valid(src):
                 (src as SpriteBase3D).visible = true
+        old_node.visible = false
         old_node.queue_free()
     popout_pawns.erase(raw_id)
-    if player_nodes.has(raw_id):
-        _restore_source_sprite(player_nodes[raw_id])
 
 func _clear_elevated_pawns() -> void:
     for raw_id: Variant in popout_pawns.keys():

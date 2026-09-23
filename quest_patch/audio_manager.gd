@@ -253,6 +253,51 @@ func stop_engine() -> void:
 		engine_player.stop()
 	update_bed()
 
+func update_nearby_traffic(vehicles: Dictionary) -> void:
+	# On foot the local engine is silent. Passing traffic still uses that
+	# same loop, quieter as it gets further away. Parked cars stay quiet.
+	if _driving or engine_player == null:
+		return
+	var best: Node = null
+	var best_distance: float = 26.0
+	for raw_id: Variant in vehicles.keys():
+		var vehicle: Node = vehicles[raw_id]
+		if vehicle == null or not is_instance_valid(vehicle):
+			continue
+		if bool(vehicle.get("is_destroyed")):
+			continue
+		if absf(float(vehicle.get("current_speed"))) < 0.6:
+			continue
+		var pos: Vector3 = (vehicle as Node3D).position
+		var distance: float = Vector2(pos.x - _ear.x, pos.z - _ear.z).length()
+		if distance < best_distance:
+			best_distance = distance
+			best = vehicle
+	if best == null:
+		if _engine_wanted:
+			stop_engine()
+		return
+	var variant: String = str(best.get("variant_id"))
+	var key: String = String(ENGINE_BY_VARIANT.get(variant, "engine_standard"))
+	if key != _engine_key or engine_player.stream == null:
+		_engine_key = key
+		engine_player.stream = _owned_loop(key)
+		engine_player.set_meta("loop_pos", -1.0)
+		engine_player.set_meta("loop_stall", 0.0)
+		if engine_player.stream != null:
+			engine_player.play()
+	if engine_player.stream == null:
+		_engine_wanted = false
+		return
+	var max_speed: float = maxf(float(best.get("max_forward_speed")), 0.1)
+	var speed_ratio: float = clampf(absf(float(best.get("current_speed"))) / max_speed, 0.0, 1.0)
+	var nearness: float = 1.0 - clampf(best_distance / 26.0, 0.0, 1.0)
+	engine_player.pitch_scale = 0.82 + speed_ratio * (0.36 if variant == "tank" else 0.55)
+	engine_player.volume_db = lerpf(-28.0, -7.0, nearness * nearness)
+	_engine_wanted = true
+	_driving = false
+	_service_loop(engine_player)
+
 func update_bed() -> void:
 	if radio_player == null:
 		return

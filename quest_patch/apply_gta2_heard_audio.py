@@ -186,7 +186,7 @@ main = replace(
                         steer_amount = absf((inputs[local_id] as Vector2).x)
                     audio_manager.note_skid(absf(driven.current_speed), steer_amount, driven.max_forward_speed)
                 else:
-                    audio_manager.stop_engine()
+                    audio_manager.update_nearby_traffic(vehicles)
                     audio_manager.note_footstep(p._is_moving)
                 if input_bridge != null and input_bridge.consume_radio_next():
                     _show_combat_message(audio_manager.cycle_radio())
