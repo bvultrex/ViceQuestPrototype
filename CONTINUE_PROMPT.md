@@ -119,3 +119,27 @@ Channel/Quality/Audio-Skripte existieren unter `quest_patch/` für späteres Bis
 - GitHub-Zugriff: `bvultrex` ist Admin, `gh` push auf `main` startet CI.
 
 Wenn der User nichts weiter sagt: Exact-185 fertigmachen, APK geben, auf Hardware-Report warten. Nicht Dächer, nicht Channel, nicht Tabletop.
+
+## v0.6.18.12 vehicle integration (2026-09-23)
+
+Latest green Quest build: **ViceQuest-v0.6.18.12-Vehicle-AI-Audio-Crash**.
+GitHub Actions run: https://github.com/bvultrex/ViceQuestPrototype/actions/runs/35893404320
+
+This build stays on the hardware-safe v0.6.18.5 XR board path and does **not** re-enable the black-screen-suspect 0.6.18.8 audio/channel patch.
+
+New isolated patch: `quest_patch/apply_v061812_vehicle_integration.py`
+
+Changes:
+- Added a bounded positional world-engine pool (5 voices on Quest, 10 desktop). Nearby moving/AI/player vehicles are now audible on foot and while inside another car; the entered car keeps its dedicated local engine voice.
+- Police pursuit vehicles now have logical Cop NPC occupants using a separate Cop-to-vehicle mapping. A stolen pursuit car ejects its Cop visibly, is marked hijacked, and is never silently reclaimed by pursuit AI after the player exits.
+- Fixed response Cop/Agent HP refresh: repeated `_sync_cop_profile` no longer reapplies the profile setter, and profile changes preserve existing damage.
+- Replaced vehicle-to-vehicle pinball response with a low-restitution contact pass: no longitudinal speed inversion, heavily reduced separation impulse, retained crash damage, tank crush path unchanged. Pursuit wall/contact recovery no longer flips speed negative.
+- Temporary source-inspection workflow/files used for diagnosis were removed after the patch was prepared.
+
+Hardware playtest focus for 18.12:
+1. On foot, verify several nearby traffic engines can be heard spatially.
+2. Inside a car, verify other nearby vehicles remain audible without drowning out the local engine.
+3. Trigger wanted response, steal the pursuing police vehicle, verify a Cop is ejected, then exit and confirm the car coasts/stays rather than resuming pursuit.
+4. Damage/kill Agent response units and confirm HP is not replenished every police-response tick.
+5. Test head-on, rear-end, side-swipe, traffic pile-up and police ram contacts for reduced gummy-ball bounce. Tune retention/separation only after hardware feel testing.
+
