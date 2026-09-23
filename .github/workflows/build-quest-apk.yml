@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.11-Exact-185"
+  EXPORT_NAME: "ViceQuest-v0.6.18.12-Vehicle-AI-Audio-Crash"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -207,6 +207,19 @@ jobs:
           grep -q 'func _spawn_shock_arc' "$PROJECT_DIR/scripts/main.gd"
           grep -q '"delivery": "shock_arc"' "$PROJECT_DIR/scripts/weapon_data.gd"
 
+      - name: Apply v0.6.18.12 vehicle integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061812_vehicle_integration.py" "$PROJECT_DIR"
+          grep -q 'var police_driver_by_vehicle' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func _eject_police_driver' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'response_hijacked' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'func update_world_vehicles' "$PROJECT_DIR/scripts/audio_manager.gd"
+          grep -q 'previous_profile_hp' "$PROJECT_DIR/scripts/cop.gd"
+          grep -q 'Near-inelastic GTA-style contact' "$PROJECT_DIR/scripts/vehicle.gd"
+          ! grep -q 'current_speed \*= -0.18' "$PROJECT_DIR/scripts/vehicle.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -237,7 +250,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.11-Exact-185
+          name: ViceQuest-v0.6.18.12-Vehicle-AI-Audio-Crash
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
