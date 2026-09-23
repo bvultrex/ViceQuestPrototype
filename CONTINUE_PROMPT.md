@@ -214,3 +214,75 @@ Do not continue Quest work from current `main` v0.6.18.11/12/13 unless explicitl
 - Check Quest performance in dense night traffic; vehicle lights are capped at 18 nearby vehicles and map lights at 36 nearby lights.
 - If a light appears on the wrong side of a vehicle, note the displayed vehicle name from the 18.29 HUD popup.
 
+
+## Current candidate: v0.6.18.33 Light / Audio Cleanup (2026-09-23)
+
+- Artifact: `ViceQuest-v0.6.18.33-Light-Audio-Cleanup`
+- Build head: `8f123282392e89bc9b1fbdf3f5bffd70c25f35f4`
+- GitHub Actions run: `35910090760`
+- Result: successful full patch chain through 18.33, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:eb6d474e608923f22a03f7ee91aab0028f7f610f00c380ddeb89ce7a313ad4be`
+
+### Hardware feedback entering 18.33
+
+- 18.32 confirmed the day/night lighting system and vehicle lighting are visible.
+- Lighting should be somewhat stronger.
+- Some orphan/ghost vehicle lights remained on the road after traffic vehicles despawned/recycled.
+- At spawn, nearby traffic engines briefly sounded heavily doubled/chorused before settling.
+- Reverse driving produced a trail of fading skull/blob decals because reverse throttle was misread as braking.
+- Train work is now the next planned major gameplay block after this cleanup.
+
+### v0.6.18.33 changes
+
+1. **Stronger lighting**
+   - Headlight glow sprites increased from 0.026 to 0.032 pixel size.
+   - Tail-light glow sprites increased from 0.022 to 0.027.
+   - Forward road beam increased from 0.055 to 0.070.
+   - Head/tail alpha reaches full night intensity and beam alpha is increased.
+   - Warm curb/street-light corona size and opacity are both increased.
+
+2. **Ghost vehicle-light cleanup**
+   - Ambient pooled traffic now owns lights only while actually `stream_active` (or actively occupied).
+   - A stale `ai_controlled=true` flag can no longer keep a recycled ambient vehicle illuminated.
+   - Hidden/non-board vehicles are rejected unless they are occupied or have active police FX.
+   - Light holders explicitly hide every child Sprite3D when released from the pool.
+
+3. **Spawn engine de-chorusing**
+   - Traffic engine candidates are ranked by distance and same-engine vehicles closer than 4.8 world units are collapsed to one audible voice.
+   - Newly assigned traffic voices start around -32 dB and ramp toward target volume instead of appearing at full volume in one frame.
+   - Each traffic voice receives a deterministic playback phase offset based on vehicle ID and voice index.
+   - Loop restarts preserve that phase offset, so identical engine samples do not keep snapping back into synchronization.
+   - The proven 18.29 unique physical WAV-per-voice architecture remains intact.
+
+4. **Reverse skid / skull-coin fix**
+   - `play_skid_mark()` now receives signed vehicle speed instead of `absf(current_speed)`.
+   - Reverse throttle while already moving backward is propulsion, not braking.
+   - A brake decal is generated only when throttle opposes actual travel direction.
+   - Existing lateral sliding/skid streak behavior remains.
+   - Brake-blob lifetime is also reduced from 6.5 s to 4.2 s.
+
+### Hardware test priority for 18.33
+
+- At spawn, listen for the previous three-engine chorus/phasing. It should fade in cleanly and clustered same-engine cars should no longer stack loudly.
+- Drive around until ambient traffic recycles/despawns. No headlight/taillight/beam should remain without a vehicle.
+- Let night reach full darkness and compare curb, headlight, beam and taillight intensity to 18.32.
+- Reverse normally for several seconds. No fading skull/blob trail should be created.
+- Brake while moving forward and while moving backward with opposite input. Real brake/skid marks should still appear.
+
+## Next major block: Train update
+
+After 18.33 hardware validation, the next dedicated development pass should be the Downtown train system. Treat it as a feature block rather than a hotfix. Scope should include:
+
+- reconstruct/verify the Downtown rail path and station stops,
+- train consist movement and carriage spacing,
+- proper stop/dwell/depart cycle,
+- doors and passenger entry/exit,
+- player boarding and leaving at stations,
+- train collision/impact behavior,
+- rail/train audio,
+- Quest pop-out/elevated presentation,
+- network authority/synchronization,
+- performance limits and despawn/recycle behavior if the train leaves the active area.
+
+Do not mix the train implementation into unrelated lighting/audio micro-fixes unless explicitly requested.
+
