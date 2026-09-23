@@ -286,3 +286,90 @@ After 18.33 hardware validation, the next dedicated development pass should be t
 
 Do not mix the train implementation into unrelated lighting/audio micro-fixes unless explicitly requested.
 
+
+## Current candidate: v0.6.18.34 Train Core (2026-09-23)
+
+- Artifact: `ViceQuest-v0.6.18.34-Train-Core`
+- Build head: `4fabb3a2c3cba24033de291cfe312d70188f7025`
+- GitHub Actions run: `35915952029`
+- Result: successful full patch chain through 18.34, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:2319eb4ba858c18ec155814fb3f88b42d4b515c99b6e5d009ca54a0c64e10c0b`
+
+### Original GTA2 train findings used for 18.34
+
+- GTA2 railway blocks are FIELD blocks carrying green direction arrows in the low nibble.
+- Green arrow direction bits: left bit0, right bit1, up bit2, down bit3.
+- Original car models: TRAIN=59, TRAINCAB=60, TRAINFB=61, boxcar=6.
+- Downtown open mission source contains `SET_STATION_INFO (trak02platform, 3, 0, 0)` and `SET_STATION_INFO (trak11platform, 3, 0, 0)`, so this pass builds up to two lines with a cab plus three passenger cars.
+- Original station metadata distinguishes platform, entry, exit and stop-point zones; station service is cyclic.
+
+### Build-time reconstruction result
+
+CI reconstructed the actual Downtown railway directly from `downtown_exact_map.json`:
+
+- **1360 railway cells**
+- line 0: **816 route points**
+- line 1: **544 route points**
+- **5 station stops per line**
+- all four original train sprite types were found in `wil.sty`, each with one base sprite:
+  - train_passenger / TRAIN
+  - train_cab / TRAINCAB
+  - train_freight / TRAINFB
+  - train_boxcar / boxcar
+
+### v0.6.18.34 runtime features
+
+1. **Two Downtown train services**
+   - Up to two reconstructed railway lines.
+   - Each consist is one original GTA2 TRAINCAB sprite plus three original passenger TRAIN sprites.
+   - Carriages follow the same route with fixed physical spacing instead of being one stretched sprite.
+
+2. **Station service**
+   - Route stop points are inferred from preserved Downtown platform tiles near the railway graph.
+   - Five operational stop points were recovered on each reconstructed line.
+   - Trains brake into stops, dwell for ~4.6 seconds, then accelerate away toward the next cyclic stop.
+
+3. **Networking**
+   - Server owns train progress/speed/dwell state.
+   - Lightweight unreliable state sync is sent about every 0.22 seconds.
+   - Clients continue/interpolate route progress between syncs.
+
+4. **Train collision interaction**
+   - Moving train cars check nearby gameplay vehicles.
+   - Vehicles are pushed away and receive substantial train impact damage with a short per-train/vehicle cooldown.
+   - Player-vs-train pedestrian damage/knockdown is not yet wired and should be handled in the boarding/gameplay follow-up.
+
+5. **Train audio**
+   - Manual distance-attenuated train rumble and wheel-clack loops, following the same non-3D-audio philosophy as the proven Quest mix.
+   - Door/station transition cue when the train changes stopped/door state.
+   - Audio is bounded by distance and one pair of loop players per train.
+
+6. **Quest presentation**
+   - Ground-level trains render in the gameplay viewport.
+   - Elevated train cars are cloned into the existing Quest pop-out layer so elevated rail/station segments can rise out of the tabletop.
+
+7. **Skull-coin skid cleanup**
+   - The incorrectly identified `skid_blob` (actually from the flipping skull/coin sequence) is no longer used by `play_skid_mark()`.
+   - Straight braking now uses the actual dual streak skid texture only.
+
+### Hardware test priority for 18.34
+
+- Locate both active train services and verify they stay on rails through curves/slopes.
+- Confirm consist order and spacing: cab + 3 passenger cars.
+- Follow a train through multiple stops: brake -> stop -> ~4.6 s dwell -> depart.
+- Verify the five inferred stops per line visually line up with stations/platforms rather than random track cells.
+- Listen for train rumble/clack approaching and fading with distance.
+- Check elevated/station rail segments on Quest for correct pop-out treatment.
+- Put a vehicle in the train's path and verify train impact/push/damage.
+- Brake/reverse a normal car and verify the flipping skull/coin sprite never appears as a skid mark.
+
+### Next train follow-up after hardware validation
+
+Once 18.34 route/visual behavior is validated, continue with a dedicated train interaction pass:
+- player boarding/exiting at stopped stations,
+- original-style train hijacking/driver control where appropriate,
+- passenger NPC enter/leave behavior,
+- real door-state visuals if additional train sprite frames/assets are identified,
+- pedestrian impact/knockdown/death rules,
+- exact original train sample-bank extraction to replace the temporary synthesized rumble/clack if feasible.
+
