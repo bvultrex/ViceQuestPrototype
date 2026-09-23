@@ -7,7 +7,7 @@ on:
       - ".github/workflows/inspect-source.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   inspect:
@@ -26,11 +26,11 @@ jobs:
           PROJECT_FILE="$(find /tmp/vq -name project.godot -print -quit)"
           test -n "$PROJECT_FILE"
           echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> "$GITHUB_ENV"
-      - name: Print gameplay source slices
+      - name: Capture gameplay source slices
         shell: bash
         run: |
-          python3 - <<'PY'
-          import os,re
+          python3 - <<'PY' > SOURCE_INSPECTION.txt
+          import os
           from pathlib import Path
           root=Path(os.environ["PROJECT_DIR"])
           files=["scripts/main.gd","scripts/vehicle.gd","scripts/cop.gd","scripts/audio_manager.gd","scripts/player.gd"]
@@ -48,12 +48,20 @@ jobs:
                       j=i+1
                       while j<len(lines) and not lines[j].startswith("func "):
                           j+=1
-                      block="\n".join(lines[i:min(j,i+180)])
-                      print(f"\n--- lines {i+1}-{min(j,i+180)} ---\n{block}")
-              # key declarations / direct references
+                      block="\n".join(lines[i:min(j,i+220)])
+                      print(f"\n--- lines {i+1}-{min(j,i+220)} ---\n{block}")
               for i,line in enumerate(lines):
                   low=line.lower()
-                  if any(k in low for k in ("driver_id","current_speed","linear_velocity","velocity","engine_player","engine_key","response_role")):
-                      a=max(0,i-3); b=min(len(lines),i+8)
+                  if any(k in low for k in ("driver_id","current_speed","linear_velocity","velocity","engine_player","engine_key","response_role","is_alive","hp")):
+                      a=max(0,i-4); b=min(len(lines),i+10)
                       print(f"\n... context {i+1} ...\n"+"\n".join(lines[a:b]))
           PY
+      - name: Commit inspection output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "vicequest-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add SOURCE_INSPECTION.txt
+          git commit -m "CI: capture source inspection" || exit 0
+          git push
