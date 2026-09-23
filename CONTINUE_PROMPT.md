@@ -143,3 +143,25 @@ Hardware playtest focus for 18.12:
 4. Damage/kill Agent response units and confirm HP is not replenished every police-response tick.
 5. Test head-on, rear-end, side-swipe, traffic pile-up and police ram contacts for reduced gummy-ball bounce. Tune retention/separation only after hardware feel testing.
 
+## v0.6.18.13 Quest audio-listener hotfix (2026-09-23)
+
+Green Quest build: **ViceQuest-v0.6.18.13-Quest-Audio-Listener**.
+GitHub Actions run: https://github.com/bvultrex/ViceQuestPrototype/actions/runs/35894997381
+
+Root cause of the 18.12 audio regression:
+- In Quest mode the room-anchored XRCamera stayed at the initial game/spawn position.
+- The visible gameplay camera followed the player inside a SubViewport.
+- AudioStreamPlayer3D attenuation still used the root/XR camera listener, so spatial sound became quieter as the player moved away from spawn. This also pushed the new vehicle-engine voices outside their short max-distance and could make engines appear completely silent.
+
+Fix:
+- `quest_patch/presentation_rig.gd` now creates `QuestGameplayAudioListener` (AudioListener3D) only for the XR tabletop path.
+- It calls `make_current()` and follows `smoothed_target + Vector3(0, 0.75, 0)` every gameplay follow update.
+- Desktop keeps its existing camera-listener behavior.
+- CI now verifies the listener node and `make_current()` call before export.
+
+Hardware test focus:
+1. Fire the same weapon near spawn and far across Downtown. Local shot loudness should remain consistent relative to the player.
+2. Enter a vehicle far from spawn and confirm the local engine is audible immediately.
+3. Walk near moving traffic and verify spatial engine falloff follows player distance to vehicles, not distance to spawn.
+4. Drive away from spawn while listening to nearby traffic and weapons to confirm the entire 3D sound field moves with gameplay.
+
