@@ -20,17 +20,17 @@ audio_path = root / "scripts" / "audio_manager.gd"
 audio = audio_path.read_text(encoding="utf-8")
 
 def func_span(text: str, name: str) -> tuple[int, int]:
-    match = re.search(rf"(?m)^func {re.escape(name)}\\s*\\(", text)
+    match = re.search(rf"(?m)^func {re.escape(name)}\s*\(", text)
     if match is None:
         raise SystemExit(f"Missing function {name}")
     start = match.start()
-    next_match = re.search(r"(?m)^func [A-Za-z0-9_]+\\s*\\(", text[match.end():])
+    next_match = re.search(r"(?m)^func [A-Za-z0-9_]+\s*\(", text[match.end():])
     end = len(text) if next_match is None else match.end() + next_match.start()
     return start, end
 
 def replace_func(text: str, name: str, replacement: str) -> str:
     start, end = func_span(text, name)
-    return text[:start] + replacement.rstrip() + "\\n\\n" + text[end:]
+    return text[:start] + replacement.rstrip() + "\n\n" + text[end:]
 
 traffic = """func update_nearby_traffic(vehicles: Dictionary) -> void:
     # Keep three bounded voices for Quest, but do not require remote current_speed
