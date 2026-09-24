@@ -418,3 +418,71 @@ Once 18.34 route/visual behavior is validated, continue with a dedicated train i
 4. If the game boots but no train appears, that is an acceptable recovery result and indicates the deferred train configure hit a guarded runtime problem; preserve the stable boot and debug train construction next.
 5. Do not treat 18.35 as hardware-good until Quest startup is explicitly confirmed.
 
+
+## Current recovery candidate: v0.6.18.36 Recovery-18.33 (2026-09-24)
+
+- Artifact: `ViceQuest-v0.6.18.36-Recovery-18.33`
+- Build head: `9d98e7bfacc8c8a4192879a0a04b68e570e43bf2`
+- GitHub Actions run: `36024937685`
+- Result: successful 18.33 gameplay patch chain + isolated real-skid fix, clean audio-manager normalization, runtime smoke diagnostic, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:3c65b518e75b81320cd57d8b02aeca803d1e32c58c38199424eb988daa459fe5`
+
+### Hardware regression history
+
+- **18.33 is the last hardware-confirmed working gameplay baseline.**
+- 18.34 Train Core booted to black screen with no sound on Quest hardware.
+- 18.35 Train Recovery also booted to black screen with no sound.
+- Therefore 18.34/18.35 must NOT be used as a stable baseline.
+- 18.36 deliberately removes all 18.34/18.35 train runtime/init/popout hooks from the build pipeline and returns generated runtime code to the 18.33 line.
+- Train assets/research/route reconstruction patches remain in the repository for later controlled reintroduction, but they are not applied by 18.36.
+
+### Important clean-build issue discovered
+
+A new direct Godot parser diagnostic found a real generated-source problem independent of the train system:
+
+`res://scripts/audio_manager.gd:298` reported:
+`Parse Error: Used space character for indentation instead of tab as used before in the file.`
+
+The historical audio patch chain had inserted several 4-space-indented blocks into a tab-indented GDScript file. Older artifacts could appear to work if an imported script cache masked the clean parse, but a later clean build can expose it and prevent `main.gd` from preloading `ViceQuestAudioManager`.
+
+18.36 now runs `apply_v061836_audio_indent_fix.py` after the full 18.33 patch chain:
+- converts mixed leading block indentation in generated `audio_manager.gd` to the project tab convention,
+- CI reported **213 normalized lines**,
+- the direct `audio_manager.gd --check-only` parser diagnostic no longer produced the indentation error,
+- the following runtime smoke diagnostic produced no GDScript parse/runtime errors,
+- Quest Android export then completed successfully.
+
+Headless CI still has no physical OpenXR runtime/HMD; OpenXR loader warnings in that environment are expected and are not equivalent to Quest hardware failure.
+
+### Isolated skid-sprite fix retained
+
+18.36 applies `apply_v061836_skid_sprite_fix.py` independently of the train patch:
+- removes the misidentified `skid_blob` / flipping skull-coin sprite from `play_skid_mark()`,
+- straight braking uses the real dual `skid` streak texture,
+- no train code is required for this fix.
+
+### Immediate hardware validation
+
+The only priority for 18.36 is startup recovery:
+1. Install `ViceQuest-v0.6.18.36-Recovery-18.33`.
+2. Confirm the app boots into the normal Quest tabletop instead of a black screen.
+3. Confirm normal game audio returns.
+4. Briefly confirm the established 18.33 systems still exist: traffic engines, police siren/blue beacon, day/night lighting and vehicle lights.
+5. Reverse/brake once and confirm the flipping skull-coin sprite is no longer used as a skid mark.
+
+### Train reintroduction plan after 18.36 hardware confirmation
+
+Do NOT restore the full 18.34 runtime at once. Reintroduce the train in isolated layers:
+1. static original TRAINCAB + three TRAIN sprites on one known rail segment, no movement/audio/network/collision/popout;
+2. hardware boot validation;
+3. route movement only;
+4. station stop/dwell logic;
+5. second line / second consist;
+6. audio;
+7. Quest elevated popout;
+8. collisions;
+9. multiplayer synchronization;
+10. boarding/hijacking/passenger behavior.
+
+This staged approach must preserve an always-known-good Quest boot checkpoint after every layer.
+
