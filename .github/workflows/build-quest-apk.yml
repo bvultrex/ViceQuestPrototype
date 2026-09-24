@@ -480,6 +480,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Build the GDScript global-class cache first, matching the normal
+          # Android export path. Running the game before this import produces
+          # false "Could not find type ViceQuest..." parse errors.
+          godot --headless --editor --path "$PROJECT_DIR" --quit
           LOG="$PROJECT_DIR/runtime-smoke.log"
           godot --headless --path "$PROJECT_DIR" --quit-after 90 --log-file "$LOG" || {
             cat "$LOG" || true
