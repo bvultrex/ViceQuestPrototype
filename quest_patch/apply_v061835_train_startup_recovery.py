@@ -54,6 +54,10 @@ main = must_replace(
     'train_system.call("configure", self, DOWNTOWN_DATA.TILE_SIZE, 0.60, presentation_rig)',
     "safe height scale",
 )
+# The generated base can contain additional Downtown height lookups after the
+# complete patch chain. HEIGHT_UNIT is not part of the proven runtime contract,
+# so normalize every remaining occurrence before startup.
+main = main.replace("DOWNTOWN_DATA.HEIGHT_UNIT", "0.60")
 
 # Replace synchronous startup with a deferred boot sequence. The base game,
 # Quest presentation rig and audio manager get several frames to initialize.
