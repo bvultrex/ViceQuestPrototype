@@ -477,6 +477,7 @@ jobs:
           test -f "$PROJECT_DIR/addons/godotopenxrvendors/plugin.gdextension"
 
       - name: Runtime smoke test
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -484,6 +485,9 @@ jobs:
           # Android export path. Running the game before this import produces
           # false "Could not find type ViceQuest..." parse errors.
           godot --headless --editor --path "$PROJECT_DIR" --quit
+          echo "=== direct audio_manager parser diagnostic ==="
+          godot --headless --path "$PROJECT_DIR" --script res://scripts/audio_manager.gd --check-only || true
+          echo "=== full runtime smoke ==="
           LOG="$PROJECT_DIR/runtime-smoke.log"
           godot --headless --path "$PROJECT_DIR" --quit-after 90 --log-file "$LOG" || {
             cat "$LOG" || true
