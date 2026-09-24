@@ -463,6 +463,13 @@ jobs:
           grep -q 'world_radius \* 2.05' "$PROJECT_DIR/scripts/main.gd"
           grep -q '_make_light_sprite("Beam", gta2_headbeam_texture, 0.070, 20)' "$PROJECT_DIR/scripts/main.gd"
 
+      - name: Apply v0.6.18.36 isolated skid sprite fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061836_skid_sprite_fix.py" "$PROJECT_DIR"
+          ! sed -n '/func play_skid_mark/,/func play_crash_sparks/p' "$PROJECT_DIR/scripts/combat_fx.gd" | grep -q 'skid_blob'
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
