@@ -476,6 +476,21 @@ jobs:
           cp -a /tmp/openxr/asset/addons/godotopenxrvendors "$PROJECT_DIR/addons/"
           test -f "$PROJECT_DIR/addons/godotopenxrvendors/plugin.gdextension"
 
+      - name: Runtime smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG="$PROJECT_DIR/runtime-smoke.log"
+          godot --headless --path "$PROJECT_DIR" --quit-after 90 --log-file "$LOG" || {
+            cat "$LOG" || true
+            exit 1
+          }
+          cat "$LOG"
+          if grep -E -q 'SCRIPT ERROR|Invalid get index|Invalid call|Invalid access|Invalid assignment|Nonexistent function|Attempt to call|Invalid operands' "$LOG"; then
+            echo "Runtime smoke test found a GDScript runtime error."
+            exit 1
+          fi
+
       - name: Import and build Quest APK
         shell: bash
         run: |
