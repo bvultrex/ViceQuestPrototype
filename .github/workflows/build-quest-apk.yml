@@ -470,6 +470,13 @@ jobs:
           python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061836_skid_sprite_fix.py" "$PROJECT_DIR"
           ! sed -n '/func play_skid_mark/,/func play_crash_sparks/p' "$PROJECT_DIR/scripts/combat_fx.gd" | grep -q 'skid_blob'
 
+      - name: Normalize generated audio manager indentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061836_audio_indent_fix.py" "$PROJECT_DIR"
+          ! grep -nP '^    \S' "$PROJECT_DIR/scripts/audio_manager.gd" | head -1
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
