@@ -20,7 +20,7 @@ concurrency:
 env:
   GODOT_VERSION: "4.5.1"
   OPENXR_VENDORS_VERSION: "4.3.1-stable"
-  EXPORT_NAME: "ViceQuest-v0.6.18.34-Train-Core"
+  EXPORT_NAME: "ViceQuest-v0.6.18.35-Train-Recovery"
   EXPECTED_SOURCE_SHA256: "1554e2a9fd43624013cd8f3d934652176d7eb0d556c61d979105318baeb2caf3"
 
 jobs:
@@ -478,6 +478,16 @@ jobs:
           grep -q 'func _build_train_system' "$PROJECT_DIR/scripts/main.gd"
           ! sed -n '/func play_skid_mark/,/func play_crash_sparks/p' "$PROJECT_DIR/scripts/combat_fx.gd" | grep -q 'skid_blob'
 
+      - name: Apply v0.6.18.35 train startup recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/quest_patch/apply_v061835_train_startup_recovery.py" "$PROJECT_DIR"
+          grep -q 'call_deferred("_start_train_system_after_boot")' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'DOWNTOWN_DATA.TILE_SIZE, 0.60, presentation_rig' "$PROJECT_DIR/scripts/main.gd"
+          ! grep -q 'DOWNTOWN_DATA.HEIGHT_UNIT' "$PROJECT_DIR/scripts/main.gd"
+          grep -q 'if not _configured or trains.is_empty()' "$PROJECT_DIR/scripts/train_system.gd"
+
       - name: Install OpenXR Vendors
         shell: bash
         run: |
@@ -508,7 +518,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ViceQuest-v0.6.18.34-Train-Core
+          name: ViceQuest-v0.6.18.35-Train-Recovery
           path: |
             ${{ env.PROJECT_DIR }}/build/android-quest/*.apk
             ${{ env.PROJECT_DIR }}/build/android-quest/*.sha256
