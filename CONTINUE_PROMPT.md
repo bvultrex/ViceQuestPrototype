@@ -373,3 +373,48 @@ Once 18.34 route/visual behavior is validated, continue with a dedicated train i
 - pedestrian impact/knockdown/death rules,
 - exact original train sample-bank extraction to replace the temporary synthesized rumble/clack if feasible.
 
+
+## Current candidate: v0.6.18.35 Train Recovery (2026-09-24)
+
+- Artifact: `ViceQuest-v0.6.18.35-Train-Recovery`
+- Build head: `59ebe1009e963cb3e2ec2b8fb1493b868467a284`
+- GitHub Actions run: `36014682235`
+- Result: successful full patch chain through 18.35, Godot 4.5.1 import, Quest APK export and artifact upload.
+- Artifact digest: `sha256:9f75db77f9dc9927601390775e528ec2e3c623c58660e6397d93c73e05b70f2d`
+
+### Important hardware regression / recovery
+
+- **v0.6.18.34 is NOT a valid hardware baseline.**
+- Hardware result for 18.34: Quest app remained black from startup and produced no sound.
+- Last confirmed hardware-good baseline before train work remains **v0.6.18.33**.
+- Audit found the 18.34 train startup ran synchronously inside the critical main/XR startup path and referenced `DOWNTOWN_DATA.HEIGHT_UNIT`, which is not part of the previously proven Downtown runtime contract.
+- The first 18.35 CI attempt intentionally failed because a guard detected another remaining `DOWNTOWN_DATA.HEIGHT_UNIT` reference after the full generated patch chain.
+- Final 18.35 normalizes every remaining `DOWNTOWN_DATA.HEIGHT_UNIT` occurrence in generated `main.gd` to the established vertical scale `0.60`.
+
+### v0.6.18.35 recovery changes
+
+1. **Deferred train boot**
+   - Main game/XR/audio startup no longer calls `_build_train_system()` synchronously.
+   - It schedules `_start_train_system_after_boot()` and waits three normal process frames before building trains.
+   - This keeps optional public transport out of the critical Quest startup path.
+
+2. **Safe Downtown height contract**
+   - Train configure call uses `DOWNTOWN_DATA.TILE_SIZE` plus explicit `0.60` vertical scale.
+   - CI asserts that no `DOWNTOWN_DATA.HEIGHT_UNIT` reference remains.
+
+3. **Train runtime fail-safe**
+   - Train system now has `_configured=false` until routes and trains are successfully constructed.
+   - If no valid lines/trains are created, configure returns with warnings and train physics remains inert.
+   - `_physics_process()` exits immediately while not configured, so a failed train configuration cannot run a broken per-frame system.
+
+4. **Reduced startup-validation workload**
+   - Train/vehicle impact scanning is throttled to 10 Hz rather than every physics frame for this recovery candidate.
+
+### Hardware test priority for 18.35
+
+1. **First priority: verify the app boots normally with picture and sound.**
+2. If boot succeeds, confirm the pre-train 18.33 systems still work: traffic sound, lighting, vehicles and input.
+3. Then locate trains and verify whether the 18.34 route/visual core appears.
+4. If the game boots but no train appears, that is an acceptable recovery result and indicates the deferred train configure hit a guarded runtime problem; preserve the stable boot and debug train construction next.
+5. Do not treat 18.35 as hardware-good until Quest startup is explicitly confirmed.
+
